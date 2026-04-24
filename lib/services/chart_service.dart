@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/constants/api_constants.dart';
@@ -56,7 +57,7 @@ class ChartService {
       }
       return [];
     } catch (e) {
-      print('Error fetching chart data: $e');
+      debugPrint('Error fetching chart data: $e');
       return [];
     }
   }

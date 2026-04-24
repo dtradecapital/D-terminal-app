@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import '../core/constants/api_constants.dart';
 
@@ -26,7 +27,7 @@ class NewsService {
           return response.data['news'];
         }
       } catch (e) {
-        print('Twelve Data News Error: $e');
+        debugPrint('Twelve Data News Error: $e');
       }
     }
 
@@ -40,7 +41,7 @@ class NewsService {
         return response.data is List ? response.data : response.data['articles'] ?? [];
       }
     } catch (e) {
-      print('Proxy News Error: $e');
+      debugPrint('Proxy News Error: $e');
     }
     
     // Final fallback to high-quality mock data (which correctly labels dates)

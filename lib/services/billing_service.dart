@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -69,11 +69,11 @@ class BillingService {
           .order('created_at')
           .map((data) => data.map((json) => PaymentHistory.fromJson(json)).toList())
           .handleError((error) {
-            print('Billing Stream Error: $error');
+            debugPrint('Billing Stream Error: $error');
             return <PaymentHistory>[];
           });
     } catch (e) {
-      print('Billing Stream Init Error: $e');
+      debugPrint('Billing Stream Init Error: $e');
       return Stream.value([]);
     }
   }
@@ -135,7 +135,7 @@ class BillingService {
       
       return true;
     } catch (e) {
-      print('Buy Plan Error: $e');
+      debugPrint('Buy Plan Error: $e');
       return false;
     }
   }
@@ -177,7 +177,7 @@ class BillingService {
       });
       return true;
     } catch (e) {
-      print('Verification Submit Error: $e');
+      debugPrint('Verification Submit Error: $e');
       return false;
     }
   }

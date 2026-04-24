@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -49,7 +50,7 @@ class SupportService {
       
       return (response as List).map((json) => SupportTicket.fromJson(json)).toList();
     } catch (e) {
-      print('Error fetching tickets: $e');
+      debugPrint('Error fetching tickets: $e');
       return [];
     }
   }
@@ -68,7 +69,7 @@ class SupportService {
       });
       return true;
     } catch (e) {
-      print('Error creating ticket: $e');
+      debugPrint('Error creating ticket: $e');
       return false;
     }
   }

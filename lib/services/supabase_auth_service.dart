@@ -42,7 +42,6 @@ class SupabaseAuthService {
   /// Sign in with Google
   static Future<void> signInWithGoogle() async {
     // Generate a secure random nonce for Web/Mobile ID token flow
-    final rawNonce = DateTime.now().millisecondsSinceEpoch.toString();
     // In a real app, use a proper crypto-random nonce. 
     // Supabase signInWithIdToken validates the nonce in the ID token.
 

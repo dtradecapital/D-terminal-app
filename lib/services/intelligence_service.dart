@@ -130,7 +130,7 @@ class IntelligenceService {
       
       return _getFallbackCalendar();
     } catch (e) {
-      print('Error fetching economic calendar: $e');
+      debugPrint('Error fetching economic calendar: $e');
       return _getFallbackCalendar();
     }
   }
@@ -215,7 +215,7 @@ class IntelligenceService {
       }
       return _getFallbackSignals();
     } catch (e) {
-      print('Error fetching signals: $e');
+      debugPrint('Error fetching signals: $e');
       return _getFallbackSignals();
     }
   }
@@ -340,7 +340,7 @@ class IntelligenceService {
       }
       return null;
     } catch (e) {
-      print('Error fetching user genome: $e');
+      debugPrint('Error fetching user genome: $e');
       return null;
     }
   }
@@ -353,7 +353,7 @@ class IntelligenceService {
       }
       return [];
     } catch (e) {
-      print('Error fetching user alerts: $e');
+      debugPrint('Error fetching user alerts: $e');
       return [];
     }
   }
