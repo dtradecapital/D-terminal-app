@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../widgets/shared.dart';
-import '../widgets/market_chart.dart';
 import '../widgets/live_candle_chart.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/market_service.dart';
 import '../services/intelligence_service.dart';
 
 class TradingView extends ConsumerStatefulWidget {
@@ -30,7 +28,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
   Set<int>? __expandedSignalIndices;
   Set<int> get _expandedSignalIndices => __expandedSignalIndices ??= {};
 
-  List<Map<String, dynamic>> _marketWatchItems = [
+  final List<Map<String, dynamic>> _marketWatchItems = [
     {
       'label': 'EU',
       'color': Colors.blueAccent,
@@ -743,10 +741,9 @@ class _TradingViewState extends ConsumerState<TradingView> {
                                     fontWeight: FontWeight.w900))),
                         Expanded(
                             child: Text(
-                                (pos['pnl'].toString().startsWith('+')
+                                '${pos['pnl'].toString().startsWith('+')
                                         ? ''
-                                        : '-') +
-                                    '\$${pos['pnl'].toString().replaceAll('+', '').replaceAll('-', '')}',
+                                        : '-'}\$${pos['pnl'].toString().replaceAll('+', '').replaceAll('-', '')}',
                                 style: TextStyle(
                                     color: pos['isUp']
                                         ? const Color(0xFF00FF66)
@@ -929,8 +926,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
     }
     setState(() {
       _openPositions.add({
-        'id': '#P' +
-            DateTime.now().millisecondsSinceEpoch.toString().substring(5),
+        'id': '#P${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}',
         'type': type,
         'symbol': 'XAUUSD',
         'lot': _selectedLot,
@@ -1010,10 +1006,10 @@ class _TradingViewState extends ConsumerState<TradingView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Icon(Icons.diamond, color: gold, size: 14),
-                    const SizedBox(width: 8),
+                    Icon(Icons.diamond, color: gold, size: 14),
+                    SizedBox(width: 8),
                     Text('MARKET WATCH',
                         style: TextStyle(
                             color: gold,
@@ -1289,7 +1285,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
                         ? gold.withOpacity(0.02)
                         : Colors.transparent,
                     border: isExpanded
-                        ? Border(left: BorderSide(color: gold, width: 2))
+                        ? const Border(left: BorderSide(color: gold, width: 2))
                         : null,
                   ),
                   child: Row(
@@ -1445,10 +1441,10 @@ class _TradingViewState extends ConsumerState<TradingView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.electric_bolt, color: gold, size: 16),
-              const SizedBox(width: 8),
+              Icon(Icons.electric_bolt, color: gold, size: 16),
+              SizedBox(width: 8),
               Text('AI ALERTS',
                   style: TextStyle(
                       color: gold, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -1659,10 +1655,10 @@ class _TradingViewState extends ConsumerState<TradingView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.electric_bolt, color: gold, size: 16),
-              const SizedBox(width: 8),
+              Icon(Icons.electric_bolt, color: gold, size: 16),
+              SizedBox(width: 8),
               Text('EXECUTE TRADE',
                   style: TextStyle(
                       color: gold, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -1713,7 +1709,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
                               fontSize: 14,
                               fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      Text('Balance: \$' + _paperBalance.toStringAsFixed(0),
+                      Text('Balance: \$${_paperBalance.toStringAsFixed(0)}',
                           style: const TextStyle(
                               color: gold,
                               fontSize: 13,

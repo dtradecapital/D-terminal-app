@@ -36,11 +36,11 @@ class _AccountViewState extends ConsumerState<AccountView> {
 
 
 
-  bool _t1 = true;
-  bool _t2 = true;
-  bool _t3 = true;
-  bool _t4 = true;
-  bool _t5 = false;
+  final bool _t1 = true;
+  final bool _t2 = true;
+  final bool _t3 = true;
+  final bool _t4 = true;
+  final bool _t5 = false;
   String _selectedMenu = 'PROFILE';
   bool _isNavExpanded = false; // Collapsibility state
   bool _isSidebarOpen = false; // Mobile sidebar state
@@ -419,11 +419,11 @@ class _AccountViewState extends ConsumerState<AccountView> {
             // Sidebar Header
             Container(
               padding: const EdgeInsets.fromLTRB(24, 60, 24, 20),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.account_circle_outlined, color: gold, size: 20),
-                  const SizedBox(width: 12),
-                  const Text(
+                  Icon(Icons.account_circle_outlined, color: gold, size: 20),
+                  SizedBox(width: 12),
+                  Text(
                     'ACCOUNT SYSTEM',
                     style: TextStyle(
                       color: Colors.white,
@@ -764,7 +764,7 @@ class _AccountViewState extends ConsumerState<AccountView> {
                   color: gold,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('SAVE CHANGES',
+                child: const Text('SAVE CHANGES',
                     style: TextStyle(
                         color: Colors.black,
                         fontWeight: FontWeight.bold,
@@ -1726,7 +1726,7 @@ class _AccountViewState extends ConsumerState<AccountView> {
             const SizedBox(height: 32),
             Container(height: 1, color: themeBorder(context).withOpacity(0.3)),
             const SizedBox(height: 16),
-            Center(
+            const Center(
               child: Text(
                 'ACCOUNT AUDIT IDENTIFIER',
                 style: TextStyle(
@@ -1784,11 +1784,11 @@ class _AccountViewState extends ConsumerState<AccountView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
+              const Row(
                 children: [
-                  const Icon(Icons.receipt_long, color: gold, size: 18),
-                  const SizedBox(width: 10),
-                  const Text(
+                  Icon(Icons.receipt_long, color: gold, size: 18),
+                  SizedBox(width: 10),
+                  Text(
                     'PAYMENT HISTORY',
                     style: TextStyle(
                       color: Colors.white,
@@ -2335,7 +2335,7 @@ class _AccountViewState extends ConsumerState<AccountView> {
                         ),
                       ],
                     ),
-                  )).toList(),
+                  )),
                   const SizedBox(height: 24),
                   GestureDetector(
                     onTap: () async {

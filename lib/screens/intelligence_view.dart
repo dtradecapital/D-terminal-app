@@ -556,12 +556,12 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                 color: gold.withOpacity(0.05),
                 border: Border.all(color: gold.withOpacity(0.1)),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Expanded(flex: 2, child: Text('TIME', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                  const Expanded(flex: 2, child: Text('CCY', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                  const Expanded(flex: 6, child: Text('EVENT', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                  Expanded(flex: 3, child: Text('FORECAST', style: const TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: Text('TIME', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 2, child: Text('CCY', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 6, child: Text('EVENT', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 3, child: Text('FORECAST', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
                 ],
               ),
             ),
@@ -588,7 +588,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                   Expanded(flex: 3, child: Text(e.forecast, style: const TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.right)),
                 ],
               ),
-            )).toList(),
+            )),
           ],
         );
       },
@@ -743,7 +743,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                           );
                        }),
                      ],
-                   )).toList(),
+                   )),
                  ],
                ),
              ),
@@ -892,9 +892,9 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                         color: gold.withOpacity(0.1),
                         border: Border.all(color: gold.withOpacity(0.3)),
                         borderRadius: BorderRadius.circular(4)),
-                    child: Row(
+                    child: const Row(
                       children: [
-                        const Icon(Icons.analytics, color: gold, size: 14),
+                        Icon(Icons.analytics, color: gold, size: 14),
                         SizedBox(width: 8),
                         Text('RULE BASED ANALYSIS',
                             style: TextStyle(
@@ -1296,8 +1296,8 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2)),
             const SizedBox(width: 14),
-            Text('10.0',
-                style: const TextStyle(
+            const Text('10.0',
+                style: TextStyle(
                     color: gold,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -1388,7 +1388,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
               Text('GLOBAL TENSION INDEX',
                   style: TextStyle(color: themeTextDim(context), fontSize: 9, letterSpacing: 1.2)),
               const SizedBox(height: 4),
-              Text('71.4', style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text('71.4', style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -1739,7 +1739,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                           color: Colors.white.withOpacity(0.5), 
                           fontSize: 11, 
                           fontWeight: FontWeight.bold)),
-                  Text('${_hoveredRisk}',
+                  Text('$_hoveredRisk',
                       style: const TextStyle(
                           color: gold, 
                           fontSize: 18, 
@@ -1797,7 +1797,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                     },
                   ),
                   const SizedBox(width: 12),
-                  Text('AI INTELLIGENCE',
+                  const Text('AI INTELLIGENCE',
                       style: TextStyle(
                           color: gold,
                           fontSize: 12,

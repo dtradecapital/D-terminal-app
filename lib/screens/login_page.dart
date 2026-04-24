@@ -161,8 +161,8 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       const SizedBox(height: 12),
                       RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
+                        text: const TextSpan(
+                          style: TextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 8.0,
@@ -172,7 +172,7 @@ class _LoginPageState extends State<LoginPage> {
                               text: 'D',
                               style: TextStyle(color: gold),
                             ),
-                            const TextSpan(
+                            TextSpan(
                               text: ' TERMINAL',
                               style: TextStyle(color: Colors.white),
                             ),
@@ -264,8 +264,8 @@ class _LoginPageState extends State<LoginPage> {
                       ),
 
                       const SizedBox(height: 32),
-                      Row(
-                        children: const [
+                      const Row(
+                        children: [
                           Expanded(child: Divider(color: border)),
                           Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
@@ -497,9 +497,9 @@ class _LoginPageState extends State<LoginPage> {
         suffixIcon: suffix,
         filled: true,
         fillColor: Colors.black,
-        enabledBorder: OutlineInputBorder(
+        enabledBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.zero,
-          borderSide: const BorderSide(color: border),
+          borderSide: BorderSide(color: border),
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.zero,

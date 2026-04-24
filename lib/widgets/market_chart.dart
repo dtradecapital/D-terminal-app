@@ -26,13 +26,13 @@ class MarketChart extends StatelessWidget {
           verticalInterval: 1,
           getDrawingHorizontalLine: (value) {
             return FlLine(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               strokeWidth: 1,
             );
           },
           getDrawingVerticalLine: (value) {
             return FlLine(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               strokeWidth: 1,
             );
           },
@@ -88,8 +88,8 @@ class MarketChart extends StatelessWidget {
               show: true,
               gradient: LinearGradient(
                 colors: [
-                  gold.withOpacity(0.2),
-                  gold.withOpacity(0),
+                  gold.withValues(alpha: 0.2),
+                  gold.withValues(alpha: 0),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,

@@ -219,10 +219,10 @@ class _PremiumSplashScreenState extends State<PremiumSplashScreen>
       children: List.generate(_words.length, (index) {
         return AnimatedOpacity(
           opacity: _phase >= 4 ? 1.0 : 0.0,
-          duration: Duration(milliseconds: 600),
-          curve: Interval(0.0, 1.0, curve: Curves.ease),
+          duration: const Duration(milliseconds: 600),
+          curve: const Interval(0.0, 1.0, curve: Curves.ease),
           child: AnimatedContainer(
-            duration: Duration(milliseconds: 650),
+            duration: const Duration(milliseconds: 650),
             curve: Curves.easeOutCubic,
             transform: Matrix4.translationValues(
               0,
@@ -258,12 +258,12 @@ class SplashPainter extends CustomPainter {
     
     // Radial Background
     final bgPaint = Paint()
-      ..shader = RadialGradient(
+      ..shader = const RadialGradient(
         center: Alignment(0, -0.24), // H * 0.38
         radius: 1.4, // size.width * 0.7 approx
         colors: [
-          const Color(0xFF080614),
-          const Color(0xFF000000),
+          Color(0xFF080614),
+          Color(0xFF000000),
         ],
       ).createShader(rect);
     canvas.drawRect(rect, bgPaint);
