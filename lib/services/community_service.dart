@@ -19,9 +19,9 @@ class CommunityMessage {
   factory CommunityMessage.fromMap(Map<String, dynamic> map) {
     return CommunityMessage(
       id: map['id']?.toString() ?? '',
-      title: map['title'] ?? 'No Title',
-      content: map['content'] ?? '',
-      type: map['type'] ?? 'all',
+      title: map['title'] ?? map['sender_name'] ?? 'Broadcast Announcement',
+      content: map['content'] ?? map['message'] ?? '',
+      type: map['type'] ?? map['sender_role'] ?? 'all',
       createdAt: DateTime.parse(map['created_at'] ?? DateTime.now().toIso8601String()),
     );
   }

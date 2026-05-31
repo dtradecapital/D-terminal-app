@@ -29,7 +29,7 @@ class SupportTicket {
       category: json['category'],
       status: json['status'],
       createdAt: DateTime.parse(json['created_at']),
-      description: json['description'],
+      description: json['message'] ?? json['description'],
     );
   }
 }
@@ -62,10 +62,11 @@ class SupportService {
     try {
       await _supabase.from('support_tickets').insert({
         'user_id': user.id,
+        'user_email': user.email,
         'subject': subject,
         'category': category,
-        'description': description,
-        'status': 'OPEN',
+        'message': description,
+        'status': 'open',
       });
       return true;
     } catch (e) {

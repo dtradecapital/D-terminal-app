@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/constants/api_constants.dart';
 
@@ -99,7 +102,10 @@ class RegionalRisk {
 }
 
 class IntelligenceService {
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 3),
+    receiveTimeout: const Duration(seconds: 3),
+  ));
 
   Future<List<EconomicEvent>> fetchEconomicCalendar() async {
     try {
@@ -332,6 +338,140 @@ class IntelligenceService {
     ];
   }
 
+  Future<GdeltData> fetchGdeltData() async {
+    final Map<String, double> scores = {
+      'ru': 9.2, 'ir': 8.8, 'ua': 8.5, 'cn': 5.8, 'us': 4.2, 'gb': 2.0, 'de': 2.0,
+      'jp': 1.8, 'kp': 7.5, 'il': 8.8, 'sy': 7.0, 'ye': 7.5, 've': 4.0, 'tw': 6.0,
+      'in': 5.0, 'sa': 4.5, 'au': 2.0, 'br': 2.0, 'ca': 2.0, 'fr': 2.0, 'za': 4.0, 'eg': 4.5
+    };
+
+    final List<GdeltHotspot> hotspots = [];
+    final List<dynamic> news = [];
+    bool isLive = false;
+
+    if (kIsWeb) {
+      // GDELT Project APIs do not support CORS, so direct requests from Web fail.
+      // Use fallback hotspots directly.
+      hotspots.addAll([
+        const GdeltHotspot(lat: 55.7558, lon: 37.6173, locationName: 'Moscow, Russia', eventCount: 42),
+        const GdeltHotspot(lat: 49.0, lon: 31.0, locationName: 'Kyiv, Ukraine', eventCount: 38),
+        const GdeltHotspot(lat: 32.4279, lon: 53.6880, locationName: 'Isfahan, Iran', eventCount: 45),
+        const GdeltHotspot(lat: 31.0461, lon: 34.8516, locationName: 'Gaza Border, Israel', eventCount: 50),
+        const GdeltHotspot(lat: 39.9042, lon: 116.4074, locationName: 'Taiwan Strait, China', eventCount: 15),
+        const GdeltHotspot(lat: 38.9072, lon: -77.0369, locationName: 'Washington DC, USA', eventCount: 12),
+        const GdeltHotspot(lat: 52.5200, lon: 13.4050, locationName: 'Berlin, Germany', eventCount: 8),
+      ]);
+      return GdeltData(
+        regionalRiskScores: scores,
+        hotspots: hotspots,
+        newsFeed: news,
+        isLive: false,
+      );
+    }
+
+    try {
+      final geoResponse = await _dio.get(
+        'https://api.gdeltproject.org/api/v2/geo/geo',
+        queryParameters: {
+          'query': 'conflict war sanctions',
+          'mode': 'pointdata',
+          'format': 'json',
+          'timespan': '1440',
+        },
+      ).timeout(const Duration(seconds: 6));
+
+      if (geoResponse.statusCode == 200 && geoResponse.data != null) {
+        isLive = true;
+        final features = geoResponse.data['features'] as List? ?? [];
+        for (var f in features) {
+          final geom = f['geometry'];
+          final props = f['properties'];
+          if (geom != null && props != null) {
+            final coords = geom['coordinates'] as List? ?? [];
+            if (coords.length >= 2) {
+              final lon = (coords[0] as num).toDouble();
+              final lat = (coords[1] as num).toDouble();
+              final count = (props['count'] as num?)?.toInt() ?? 1;
+              final name = props['name']?.toString() ?? 'Geopolitical Event';
+              hotspots.add(GdeltHotspot(lat: lat, lon: lon, locationName: name, eventCount: count));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('GDELT Geo API offline/unreachable: $e');
+    }
+
+    try {
+      final docResponse = await _dio.get(
+        'https://api.gdeltproject.org/api/v2/doc/doc',
+        queryParameters: {
+          'query': 'war conflict geopolitical',
+          'mode': 'artlist',
+          'maxrecords': '75',
+          'format': 'json',
+          'timespan': '1440',
+        },
+      ).timeout(const Duration(seconds: 6));
+
+      if (docResponse.statusCode == 200 && docResponse.data != null) {
+        isLive = true;
+        final articles = docResponse.data['articles'] as List? ?? [];
+        news.addAll(articles);
+
+        for (var art in articles) {
+          final title = (art['title'] ?? art['headline'] ?? '').toString().toLowerCase();
+          if (title.contains('russia') || title.contains('moscow') || title.contains('putin')) {
+            scores['ru'] = (scores['ru'] ?? 0.0) + 0.1;
+          }
+          if (title.contains('iran') || title.contains('tehran') || title.contains('houthi') || title.contains('yemen')) {
+            scores['ir'] = (scores['ir'] ?? 0.0) + 0.1;
+          }
+          if (title.contains('ukraine') || title.contains('kyiv') || title.contains('zelensky')) {
+            scores['ua'] = (scores['ua'] ?? 0.0) + 0.1;
+          }
+          if (title.contains('china') || title.contains('beijing') || title.contains('taiwan')) {
+            scores['cn'] = (scores['cn'] ?? 0.0) + 0.1;
+          }
+          if (title.contains('israel') || title.contains('gaza') || title.contains('lebanon') || title.contains('hamas')) {
+            scores['il'] = (scores['il'] ?? 0.0) + 0.1;
+          }
+          if (title.contains('north korea') || title.contains('kim jong')) {
+            scores['kp'] = (scores['kp'] ?? 0.0) + 0.1;
+          }
+          if (title.contains('usa') || title.contains('biden') || title.contains('washington')) {
+            scores['us'] = (scores['us'] ?? 0.0) + 0.05;
+          }
+        }
+
+        scores.forEach((key, value) {
+          if (value > 10.0) scores[key] = 10.0;
+        });
+      }
+    } catch (e) {
+      debugPrint('GDELT Doc API offline/unreachable: $e');
+    }
+
+    if (hotspots.isEmpty) {
+      hotspots.addAll([
+        GdeltHotspot(lat: 55.7558, lon: 37.6173, locationName: 'Moscow, Russia', eventCount: 42),
+        GdeltHotspot(lat: 49.0, lon: 31.0, locationName: 'Kyiv, Ukraine', eventCount: 38),
+        GdeltHotspot(lat: 32.4279, lon: 53.6880, locationName: 'Isfahan, Iran', eventCount: 45),
+        GdeltHotspot(lat: 31.0461, lon: 34.8516, locationName: 'Gaza Border, Israel', eventCount: 50),
+        GdeltHotspot(lat: 39.9042, lon: 116.4074, locationName: 'Taiwan Strait, China', eventCount: 15),
+        GdeltHotspot(lat: 38.9072, lon: -77.0369, locationName: 'Washington DC, USA', eventCount: 12),
+        GdeltHotspot(lat: 52.5200, lon: 13.4050, locationName: 'Berlin, Germany', eventCount: 8),
+      ]);
+    }
+
+    return GdeltData(
+      regionalRiskScores: scores,
+      hotspots: hotspots,
+      newsFeed: news,
+      isLive: isLive,
+    );
+  }
+
   Future<Map<String, dynamic>?> fetchUserGenome(String uid) async {
     try {
       final response = await _dio.get('${ApiConstants.aiServiceUrl}/genome/$uid');
@@ -388,3 +528,90 @@ final userGenomeProvider = FutureProvider.family<Map<String, dynamic>?, String>(
 final userAlertsProvider = FutureProvider.family<List<dynamic>, String>((ref, uid) async {
   return ref.watch(intelligenceServiceProvider).fetchUserAlerts(uid);
 });
+
+class DirectionBias {
+  final String pair;
+  final String bias; // BULLISH, BEARISH, NEUTRAL
+  final int rsi;
+  final int confidence;
+  final String h1Bias;
+  final String h4Bias;
+  final String d1Bias;
+
+  DirectionBias({
+    required this.pair,
+    required this.bias,
+    required this.rsi,
+    required this.confidence,
+    required this.h1Bias,
+    required this.h4Bias,
+    required this.d1Bias,
+  });
+}
+
+final directionBiasProvider = Provider<List<DirectionBias>>((ref) {
+  return [
+    DirectionBias(pair: 'EUR/USD', bias: 'BULLISH', rsi: 58, confidence: 72, h1Bias: 'BULLISH', h4Bias: 'NEUTRAL', d1Bias: 'BULLISH'),
+    DirectionBias(pair: 'GBP/USD', bias: 'NEUTRAL', rsi: 51, confidence: 60, h1Bias: 'NEUTRAL', h4Bias: 'BULLISH', d1Bias: 'NEUTRAL'),
+    DirectionBias(pair: 'USD/JPY', bias: 'BEARISH', rsi: 32, confidence: 85, h1Bias: 'BEARISH', h4Bias: 'BEARISH', d1Bias: 'NEUTRAL'),
+    DirectionBias(pair: 'XAU/USD', bias: 'BULLISH', rsi: 68, confidence: 91, h1Bias: 'BULLISH', h4Bias: 'BULLISH', d1Bias: 'BULLISH'),
+  ];
+});
+
+class GdeltHotspot {
+  final double lat;
+  final double lon;
+  final String locationName;
+  final int eventCount;
+
+  const GdeltHotspot({
+    required this.lat,
+    required this.lon,
+    required this.locationName,
+    required this.eventCount,
+  });
+}
+
+class GdeltData {
+  final Map<String, double> regionalRiskScores;
+  final List<GdeltHotspot> hotspots;
+  final List<dynamic> newsFeed;
+  final bool isLive;
+
+  const GdeltData({
+    required this.regionalRiskScores,
+    required this.hotspots,
+    required this.newsFeed,
+    required this.isLive,
+  });
+}
+
+final gdeltStreamProvider = StreamProvider<GdeltData>((ref) {
+  final service = ref.watch(intelligenceServiceProvider);
+  final controller = StreamController<GdeltData>();
+
+  void fetchData() async {
+    try {
+      final data = await service.fetchGdeltData();
+      if (!controller.isClosed) {
+        controller.add(data);
+      }
+    } catch (e) {
+      debugPrint('Error polling GDELT: $e');
+    }
+  }
+
+  fetchData();
+
+  final timer = Timer.periodic(const Duration(seconds: 30), (t) {
+    fetchData();
+  });
+
+  ref.onDispose(() {
+    timer.cancel();
+    controller.close();
+  });
+
+  return controller.stream;
+});
+

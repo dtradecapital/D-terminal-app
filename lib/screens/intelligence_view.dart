@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../widgets/shared.dart';
@@ -24,6 +25,16 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
 
+  // AI Hub local state
+  final TextEditingController _promptController = TextEditingController();
+  final List<Map<String, String>> _chatHistory = [
+    {'role': 'system', 'content': 'Genome-Alpha cognitive intelligence core initialized. Enter query to begin real-time risk assessment or anomaly checks.'},
+  ];
+  String _activeModel = 'GEMINI-2.0-FLASH-EXP';
+
+  // CSV journal local state
+  bool _isCsvUploaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -40,8 +51,29 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
   @override
   void dispose() {
     _pulseController.dispose();
+    _promptController.dispose();
     super.dispose();
   }
+
+  void _showModuleSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.6),
+      isScrollControlled: true,
+      builder: (ctx) {
+        return _IntelligenceDirectoryModal(
+          currentModule: _selectedModule,
+          onSelect: (module) {
+            setState(() {
+              _selectedModule = module;
+            });
+          },
+        );
+      },
+    );
+  }
+
 
   Widget _buildGeoIntelContent(bool isWide) {
     switch (_selectedSubModule) {
@@ -65,7 +97,6 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     if (label == 'TODAY') return now.toIso8601String().split('T')[0];
     if (label == 'YESTERDAY') return now.subtract(const Duration(days: 1)).toIso8601String().split('T')[0];
     
-    // For labels like "FRI 10 APR", we find the date in the last 7 days that matches
     for (int i = 2; i < 7; i++) {
       final date = now.subtract(Duration(days: i));
       if (_formatTabLabel(date) == label) {
@@ -95,18 +126,16 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Left: Regional Indices Sidebar
           SizedBox(
-            width: 280,
+            width: 260,
             child: _buildRegionalIndices(),
           ),
-          const SizedBox(width: 48),
-          // Right: Large Map and Analytics
+          const SizedBox(width: 24),
           Expanded(
             child: Column(
               children: [
                 _buildMapArea(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 _buildAIGeneratedSignals(),
               ],
             ),
@@ -117,14 +146,14 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       return Column(
         children: [
           _buildMapArea(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildTopStatsMobile(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildActiveHotspots(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildAIGeneratedSignals(),
-          const SizedBox(height: 24),
-          _buildRegionalIndices(), // Added for mobile view
+          const SizedBox(height: 16),
+          _buildRegionalIndices(),
         ],
       );
     }
@@ -133,37 +162,26 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
   Widget _buildRegionalIndices() {
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: gold.withOpacity(0.2)),
-        color: Colors.black.withOpacity(0.2), // Subtle background for mobile visibility
+        border: Border.all(color: themeBorder(context)),
+        color: themeSurface(context),
+        borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sidebarTitle('ACTIVE HOTSPOTS', '0'),
-          const SizedBox(height: 16),
-          _sidebarTitle('REGIONAL INDICES', ''),
           const SizedBox(height: 12),
-          _indexItem('Iran', 10, const Color(0xFF00FF66)),
-          _indexItem('Iraq', 10, const Color(0xFF00FF66)),
-          _indexItem('Syria', 10, Colors.amberAccent),
-          _indexItem('Yemen', 10, Colors.amberAccent),
-          _indexItem('Libya', 10, const Color(0xFF00FF66)),
-          _indexItem('Russia', 10, const Color(0xFFFF0033)),
-          _indexItem('Ukraine', 10, const Color(0xFF00FF66)),
-          _indexItem('Belarus', 10, const Color(0xFF00FF66)),
-          _indexItem('North Korea', 10, const Color(0xFFFF0033)),
-          _indexItem('Afghanistan', 10, const Color(0xFF00FF66)),
-          _indexItem('Pakistan', 10, const Color(0xFF00FF66)),
-          _indexItem('Myanmar', 10, const Color(0xFF00FF66)),
-          _indexItem('Sudan', 10, const Color(0xFF00FF66)),
-          _indexItem('Ethiopia', 10, const Color(0xFF00FF66)),
-          _indexItem('Somalia', 10, const Color(0xFF00FF66)),
-          _indexItem('Mali', 10, const Color(0xFF00FF66)),
-          _indexItem('Venezuela', 10, const Color(0xFF00FF66)),
-          _indexItem('Israel', 10, const Color(0xFF00FF66)),
-          _indexItem('Saudi Arabia', 10, const Color(0xFF00FF66)),
-          _indexItem('United States', 10, const Color(0xFF00FF66)),
+          _sidebarTitle('REGIONAL INDICES', ''),
+          const SizedBox(height: 8),
+          _indexItem('Iran', 88, sellRed),
+          _indexItem('Saudi Arabia', 45, gold),
+          _indexItem('Russia', 92, sellRed),
+          _indexItem('Ukraine', 85, sellRed),
+          _indexItem('Germany', 32, buyGreen),
+          _indexItem('China', 58, gold),
+          _indexItem('United States', 42, gold),
+          _indexItem('Japan', 18, buyGreen),
         ],
       ),
     );
@@ -175,13 +193,12 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
 
     return Column(
       children: [
-        _buildSectionHeader('BATTLESPACE INTELLIGENCE DASHBOARD'),
-        const SizedBox(height: 24),
+        _buildSectionHeader('BATTLESPACE NEWS FEED'),
+        const SizedBox(height: 16),
         newsAsync.when(
           data: (data) {
             final List<dynamic> articles = data;
             
-            // Filter articles for geographic columns
             final middleEastArticles = articles.where((a) {
               final h = a['headline']?.toString().toLowerCase() ?? '';
               return h.contains('iran') || h.contains('houthis') || h.contains('saudi') || h.contains('turkey') || h.contains('egypt') || h.contains('israel') || h.contains('middle east');
@@ -195,23 +212,21 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Left Column: Regional Indices
-                if (MediaQuery.of(context).size.width > 1000)
+                if (MediaQuery.of(context).size.width > 900)
                 SizedBox(
-                  width: 200,
+                  width: 220,
                   child: _buildRegionalIndices(),
                 ),
                 
-                if (MediaQuery.of(context).size.width > 1000)
-                const SizedBox(width: 24),
+                if (MediaQuery.of(context).size.width > 900)
+                const SizedBox(width: 16),
 
-                // Center Column: Main News Feed
                 Expanded(
                   flex: 5,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sidebarTitle('FOREX DAILY NEWS', ''),
+                      _sidebarTitle('FOREX NEWS', ''),
                       const SizedBox(height: 12),
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -236,55 +251,54 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                   ),
                 ),
 
-                const SizedBox(width: 24),
-
-                // Right Column: Geo-Categorized Intelligence
-                if (MediaQuery.of(context).size.width > 1200)
-                SizedBox(
-                  width: 240,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _sidebarTitle('MIDDLE EAST', middleEastArticles.length.toString()),
-                      const SizedBox(height: 12),
-                      if (middleEastArticles.isEmpty)
-                        _emptyGeoIntel('No regional news')
-                      else
-                        ...middleEastArticles.map((a) => _geoIntelCard(
-                          a['source'] ?? 'INTEL',
-                          a['headline'] ?? '',
-                          _formatTime(a['published_at']),
-                          0.0
-                        )),
-                      const SizedBox(height: 24),
-                      _sidebarTitle('EASTERN EUROPE', easternEuropeArticles.length.toString()),
-                      const SizedBox(height: 12),
-                      if (easternEuropeArticles.isEmpty)
-                        _emptyGeoIntel('No regional news')
-                      else
-                        ...easternEuropeArticles.map((a) => _geoIntelCard(
-                          a['source'] ?? 'INTEL',
-                          a['headline'] ?? '',
-                          _formatTime(a['published_at']),
-                          0.0
-                        )),
-                    ],
+                if (MediaQuery.of(context).size.width > 1200) ...[
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 240,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sidebarTitle('MIDDLE EAST', middleEastArticles.length.toString()),
+                        const SizedBox(height: 12),
+                        if (middleEastArticles.isEmpty)
+                          _emptyGeoIntel('No regional news')
+                        else
+                          ...middleEastArticles.map((a) => _geoIntelCard(
+                            a['source'] ?? 'INTEL',
+                            a['headline'] ?? '',
+                            _formatTime(a['published_at']),
+                            0.0
+                          )),
+                        const SizedBox(height: 24),
+                        _sidebarTitle('EASTERN EUROPE', easternEuropeArticles.length.toString()),
+                        const SizedBox(height: 12),
+                        if (easternEuropeArticles.isEmpty)
+                          _emptyGeoIntel('No regional news')
+                        else
+                          ...easternEuropeArticles.map((a) => _geoIntelCard(
+                            a['source'] ?? 'INTEL',
+                            a['headline'] ?? '',
+                            _formatTime(a['published_at']),
+                            0.0
+                          )),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
             );
           },
           loading: () => const Center(
             child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 80),
+              padding: EdgeInsets.symmetric(vertical: 60),
               child: CircularProgressIndicator(color: gold),
             ),
           ),
           error: (err, stack) => Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 80),
+              padding: const EdgeInsets.symmetric(vertical: 60),
               child: Text('ERROR LOADING NEWS: $err',
-                  style: const TextStyle(color: Colors.redAccent)),
+                  style: monoStyle(color: sellRed, fontSize: 10)),
             ),
           ),
         ),
@@ -297,37 +311,37 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     return GestureDetector(
       onTap: () => setState(() => _selectedNewsDate = label),
       child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? gold.withOpacity(0.1) : Colors.transparent,
-          border: Border.all(color: isSelected ? gold.withOpacity(0.3) : Colors.white.withOpacity(0.05)),
+          color: isSelected ? gold.withOpacity(0.05) : Colors.transparent,
+          border: Border.all(color: isSelected ? gold : border),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: Text(label,
-            style: TextStyle(
+            style: monoStyle(
                 color: isSelected ? gold : Colors.white38,
                 fontSize: 9,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5)),
+                fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   Widget _sidebarTitle(String title, String count) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFF1A1A1A))),
+        border: Border(bottom: BorderSide(color: border)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          Text(title, style: monoStyle(color: Colors.white54, fontSize: 8, fontWeight: FontWeight.bold)),
           if (count.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(2)),
-            child: Text(count, style: const TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(color: sellRed.withOpacity(0.1), border: Border.all(color: sellRed.withOpacity(0.3)), borderRadius: BorderRadius.circular(2)),
+            child: Text(count, style: monoStyle(color: sellRed, fontSize: 8, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -336,37 +350,26 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
 
   Widget _indexItem(String label, int value, Color color) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           SizedBox(
-            width: 70,
-            child: Text(label, style: const TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.bold)),
+            width: 72,
+            child: Text(label, style: monoStyle(color: Colors.white60, fontSize: 8, fontWeight: FontWeight.bold)),
           ),
           Expanded(
-            child: Stack(
-              children: [
-                Container(height: 1, color: Colors.white.withOpacity(0.05)),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  child: Row(
-                    children: List.generate(5, (index) => Expanded(
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 1),
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: index < 4 ? color.withOpacity(0.4) : Colors.transparent,
-                        ),
-                      ),
-                    )),
-                  ),
-                ),
-              ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(1),
+              child: LinearProgressIndicator(
+                value: value / 100.0,
+                backgroundColor: const Color(0xFF141414),
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+                minHeight: 2,
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(value.toString(), style: const TextStyle(color: gold, fontSize: 10, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
+          const SizedBox(width: 8),
+          Text(value.toString(), style: monoStyle(color: gold, fontSize: 9, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -376,7 +379,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     if (dateStr == null) return 'RECENT';
     try {
       DateTime dt = DateTime.parse(dateStr);
-      return "${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
+      return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
     } catch (_) {
       return 'RECENT';
     }
@@ -386,10 +389,12 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     String time = _formatTime(item['published_at']);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.only(bottom: 16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFF1A1A1A))),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: themeSection(context),
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,25 +402,24 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(item['source']?.toString().toUpperCase() ?? 'INVESTING',
-                  style: const TextStyle(color: gold, fontSize: 10, fontWeight: FontWeight.bold)),
-              Text(time, style: const TextStyle(color: Colors.white30, fontSize: 10)),
+              Text(item['source']?.toString().toUpperCase() ?? 'ANALYSIS',
+                  style: monoStyle(color: gold, fontSize: 8, fontWeight: FontWeight.bold)),
+              Text(time, style: monoStyle(color: Colors.white38, fontSize: 8)),
             ],
           ),
+          const SizedBox(height: 6),
+          Text(item['headline'] ?? item['title'] ?? 'Strategic Risk Advisory',
+              style: textStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, height: 1.35)),
           const SizedBox(height: 8),
-          Text(item['headline'] ?? item['title'] ?? 'No Headline Available',
-              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600, height: 1.4)),
-          const SizedBox(height: 12),
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                 decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(2)),
-                child: Text(item['category'] ?? 'FOREX', style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
+                child: Text(item['category'] ?? 'GEOPOLITICAL', style: monoStyle(color: Colors.white54, fontSize: 7, fontWeight: FontWeight.bold)),
               ),
-              const SizedBox(width: 12),
-              const Icon(Icons.keyboard_arrow_right, color: Colors.white24, size: 14),
-              const Text('READ MORE', style: TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold)),
+              const Spacer(),
+              Text('READ →', style: monoStyle(color: Colors.white24, fontSize: 7, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -425,24 +429,25 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
 
   Widget _geoIntelCard(String source, String title, String time, double tone) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0A0A),
-        border: Border.all(color: const Color(0xFF1A1A1A)),
+        color: const Color(0xFF0C0C0C),
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(source, style: const TextStyle(color: gold, fontSize: 9, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text(title, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
-          const SizedBox(height: 12),
+          Text(source, style: monoStyle(color: gold, fontSize: 8, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(title, style: textStyle(color: Colors.white70, fontSize: 11, height: 1.4)),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(time, style: const TextStyle(color: Colors.white24, fontSize: 10)),
-              Text('TONE: ${tone.toStringAsFixed(1)}', style: const TextStyle(color: Colors.white24, fontSize: 10)),
+              Text(time, style: monoStyle(color: Colors.white24, fontSize: 8)),
+              Text('TONE: 0.0', style: monoStyle(color: Colors.white24, fontSize: 8)),
             ],
           ),
         ],
@@ -455,18 +460,20 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 40),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF1A1A1A), style: BorderStyle.solid),
+        color: themeSurface(context),
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Center(child: Text(message, style: const TextStyle(color: Colors.white24, fontSize: 11))),
+      child: Center(child: Text(message, style: monoStyle(color: Colors.white24, fontSize: 10))),
     );
   }
 
   Widget _emptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 80),
-        child: Text('NO RECENT NEWS DETECTED',
-            style: TextStyle(color: themeTextDim(context).withOpacity(0.5))),
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Text('NO CURRENT INTELLIGENCE FLUSHED',
+            style: monoStyle(color: Colors.white24, fontSize: 10)),
       ),
     );
   }
@@ -477,14 +484,14 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       children: [
         Row(
           children: [
-            const Icon(Icons.rss_feed, color: gold, size: 20),
-            const SizedBox(width: 12),
+            const Icon(Icons.rss_feed, color: gold, size: 13),
+            const SizedBox(width: 6),
             Text(title,
-                style: TextStyle(
-                    color: themeText(context),
-                    fontSize: 14,
+                style: monoStyle(
+                    color: Colors.white,
+                    fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: 1)),
+                    letterSpacing: 0.5)),
           ],
         ),
         MouseRegion(
@@ -492,25 +499,25 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
           child: GestureDetector(
             onTap: _isRefreshing ? null : _handleRefresh,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                   color: themeSurface(context),
-                  border: Border.all(color: themeBorder(context)),
-                  borderRadius: BorderRadius.circular(4)),
+                  border: Border.all(color: border),
+                  borderRadius: BorderRadius.circular(3)),
               child: Row(
                 children: [
                   _isRefreshing
                       ? const SizedBox(
-                          width: 12,
-                          height: 12,
+                          width: 9,
+                          height: 9,
                           child: CircularProgressIndicator(
                               color: gold, strokeWidth: 1.5))
-                      : const Icon(Icons.refresh, color: gold, size: 14),
-                  const SizedBox(width: 8),
-                  Text(_isRefreshing ? 'REFRESHING...' : 'REFRESH',
-                      style: const TextStyle(
+                      : const Icon(Icons.refresh, color: gold, size: 10),
+                  const SizedBox(width: 4),
+                  Text(_isRefreshing ? 'REFRESHING' : 'REFRESH',
+                      style: monoStyle(
                           color: Colors.white,
-                          fontSize: 10,
+                          fontSize: 8,
                           fontWeight: FontWeight.bold)),
                 ],
               ),
@@ -521,71 +528,55 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     );
   }
 
-  Widget _newsItem(String title, String time, String impact) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: themeSurface(context),
-        border: Border.all(color: themeBorder(context)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Text(time, style: TextStyle(color: themeTextDim(context), fontSize: 11)),
-          const SizedBox(width: 16),
-          Expanded(child: Text(title, style: TextStyle(color: themeText(context), fontWeight: FontWeight.bold))),
-          Text(impact, style: TextStyle(color: impact.contains('HIGH') ? Colors.redAccent : gold, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCalendarTabContent() {
     final calendarAsync = ref.watch(calendarProvider);
 
     return calendarAsync.when(
       data: (events) {
-        if (events.isEmpty) return _emptyGeoIntel('NO UPCOMING EVENTS DETECTED');
+        if (events.isEmpty) return _emptyGeoIntel('NO ECONOMIC EVENTS REGISTERED');
         
         return Column(
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: gold.withOpacity(0.05),
-                border: Border.all(color: gold.withOpacity(0.1)),
+                color: gold.withOpacity(0.04),
+                border: Border.all(color: border),
+                borderRadius: BorderRadius.circular(4),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Expanded(flex: 2, child: Text('TIME', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                  Expanded(flex: 2, child: Text('CCY', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                  Expanded(flex: 6, child: Text('EVENT', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                  Expanded(flex: 3, child: Text('FORECAST', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: Text('TIME', style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 2, child: Text('CCY', style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 6, child: Text('ECONOMIC EVENT', style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 3, child: Text('IMPACT', style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                  Expanded(flex: 3, child: Text('FORECAST', style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
                 ],
               ),
             ),
             const SizedBox(height: 8),
             ...events.map((e) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFF1A1A1A))),
+                border: Border(bottom: BorderSide(color: border)),
               ),
               child: Row(
                 children: [
-                  Expanded(flex: 2, child: Text(e.time, style: const TextStyle(color: Colors.white70, fontSize: 11))),
-                  Expanded(flex: 2, child: Text(e.country, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold))),
-                  Expanded(flex: 6, child: Text(e.event, style: const TextStyle(color: Colors.white, fontSize: 12))),
-                  Expanded(flex: 3, child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _getImpactColor(e.impact).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(2),
-                      border: Border.all(color: _getImpactColor(e.impact).withOpacity(0.2)),
+                  Expanded(flex: 2, child: Text(e.time, style: monoStyle(color: Colors.white70, fontSize: 10))),
+                  Expanded(flex: 2, child: Text(e.country, style: monoStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
+                  Expanded(flex: 6, child: Text(e.event, style: textStyle(color: Colors.white, fontSize: 11))),
+                  Expanded(flex: 3, child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _getImpactColor(e.impact).withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(2),
+                        border: Border.all(color: _getImpactColor(e.impact).withOpacity(0.3), width: 0.5),
+                      ),
+                      child: Text(e.impact.toUpperCase(), style: monoStyle(color: _getImpactColor(e.impact), fontSize: 8, fontWeight: FontWeight.bold)),
                     ),
-                    child: Text(e.impact.toUpperCase(), style: TextStyle(color: _getImpactColor(e.impact), fontSize: 9, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                   )),
-                  Expanded(flex: 3, child: Text(e.forecast, style: const TextStyle(color: Colors.white70, fontSize: 11), textAlign: TextAlign.right)),
+                  Expanded(flex: 3, child: Text(e.forecast, style: monoStyle(color: Colors.white70, fontSize: 10), textAlign: TextAlign.right)),
                 ],
               ),
             )),
@@ -593,19 +584,19 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         );
       },
       loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 80),
+        padding: EdgeInsets.symmetric(vertical: 60),
         child: Center(child: CircularProgressIndicator(color: gold)),
       ),
-      error: (e, stack) => _emptyGeoIntel('ERROR LOADING CALENDAR'),
+      error: (e, stack) => _emptyGeoIntel('ERROR SYNCHRONIZING CALENDAR'),
     );
   }
 
   Color _getImpactColor(String impact) {
     switch (impact.toUpperCase()) {
-      case 'HIGH': return const Color(0xFFFF0033);
+      case 'HIGH': return sellRed;
       case 'MEDIUM': return gold;
-      case 'LOW': return const Color(0xFF00FF66);
-      default: return Colors.white30;
+      case 'LOW': return buyGreen;
+      default: return Colors.white38;
     }
   }
 
@@ -618,12 +609,12 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         
         return Column(
           children: signals.map((s) => Container(
-            margin: const EdgeInsets.only(bottom: 20),
-            padding: const EdgeInsets.all(24),
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF0A0A0A),
-              border: Border.all(color: const Color(0xFF1A1A1A)),
-              borderRadius: BorderRadius.circular(4),
+              color: themeSurface(context),
+              border: Border.all(color: themeBorder(context)),
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,57 +625,51 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(s.pair, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                        const SizedBox(height: 4),
-                        Text(s.timeframe, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                        Text(s.pair, style: monoStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(s.timeframe, style: monoStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: s.type == 'BUY' ? const Color(0xFF00FF66).withOpacity(0.1) : const Color(0xFFFF0033).withOpacity(0.1),
-                        border: Border.all(color: s.type == 'BUY' ? const Color(0xFF00FF66) : const Color(0xFFFF0033)),
+                        color: s.type == 'BUY' ? buyGreen.withOpacity(0.05) : sellRed.withOpacity(0.05),
+                        border: Border.all(color: s.type == 'BUY' ? buyGreen : sellRed),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(s.type, style: TextStyle(color: s.type == 'BUY' ? const Color(0xFF00FF66) : const Color(0xFFFF0033), fontWeight: FontWeight.w900, fontSize: 14)),
+                      child: Text(s.type, style: monoStyle(color: s.type == 'BUY' ? buyGreen : sellRed, fontWeight: FontWeight.bold, fontSize: 11)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
-                Text('"${s.headline}"', style: const TextStyle(color: Colors.white70, fontSize: 15, fontFamily: 'serif', height: 1.5)),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+                Text('"${s.headline}"', style: textStyle(color: Colors.white70, fontSize: 12, height: 1.4)),
+                const SizedBox(height: 12),
                 Row(
                   children: s.tags.map((tag) => Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), border: Border.all(color: Colors.white.withOpacity(0.1))),
-                    child: Text(tag, style: const TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.bold)),
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.04), border: Border.all(color: border), borderRadius: BorderRadius.circular(2)),
+                    child: Text(tag, style: monoStyle(color: Colors.white54, fontSize: 8)),
                   )).toList(),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Text('CONFIDENCE', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                    const SizedBox(width: 16),
+                    Text('CONFIDENCE', style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Stack(
-                        children: [
-                          Container(height: 8, color: Colors.white.withOpacity(0.05)),
-                          FractionallySizedBox(
-                            widthFactor: s.confidence / 100,
-                            child: Container(
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: gold,
-                                boxShadow: [BoxShadow(color: gold.withOpacity(0.5), blurRadius: 10)],
-                              ),
-                            ),
-                          ),
-                        ],
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(1),
+                        child: LinearProgressIndicator(
+                          value: s.confidence / 100.0,
+                          backgroundColor: const Color(0xFF141414),
+                          valueColor: const AlwaysStoppedAnimation<Color>(gold),
+                          minHeight: 4,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Text('${s.confidence}%', style: const TextStyle(color: gold, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                    const SizedBox(width: 12),
+                    Text('${s.confidence}%', style: monoStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ],
@@ -693,7 +678,7 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         );
       },
       loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 80),
+        padding: EdgeInsets.symmetric(vertical: 60),
         child: Center(child: CircularProgressIndicator(color: gold)),
       ),
       error: (e, stack) => _emptyGeoIntel('ERROR LOADING SIGNALS'),
@@ -711,33 +696,33 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-             const Text('Country-Asset Correlation Matrix', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-             const SizedBox(height: 8),
-             const Text('Geopolitical risk event correlation with FX & commodity pairs. Green = positive, Red = negative.', style: TextStyle(color: Colors.white38, fontSize: 11)),
-             const SizedBox(height: 24),
+             Text('Risk Event Correlation Matrix', style: monoStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+             const SizedBox(height: 4),
+             Text('Geopolitical event correlation coefficients. Green = Positive, Red = Inverse.', style: textStyle(color: Colors.white38, fontSize: 10)),
+             const SizedBox(height: 16),
              SingleChildScrollView(
                scrollDirection: Axis.horizontal,
                child: Table(
-                 defaultColumnWidth: const FixedColumnWidth(110),
-                 border: TableBorder.all(color: const Color(0xFF1A1A1A), width: 0.5),
+                 defaultColumnWidth: const FixedColumnWidth(90),
+                 border: TableBorder.all(color: border, width: 0.5),
                  children: [
                    TableRow(
                      children: [
-                       const Padding(padding: EdgeInsets.all(12), child: Text('Country', style: TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold))),
-                       ...assets.map((asset) => Padding(padding: const EdgeInsets.all(12), child: Text(asset, style: const TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center))),
+                       const Padding(padding: EdgeInsets.all(10), child: Text('Country', style: TextStyle(color: Colors.white30, fontSize: 9, fontWeight: FontWeight.bold))),
+                       ...assets.map((asset) => Padding(padding: const EdgeInsets.all(10), child: Text(asset, style: const TextStyle(color: Colors.white30, fontSize: 9, fontWeight: FontWeight.bold), textAlign: TextAlign.center))),
                      ],
                    ),
                    ...countries.map((country) => TableRow(
                      children: [
-                       Padding(padding: const EdgeInsets.all(12), child: Text(country, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold))),
+                       Padding(padding: const EdgeInsets.all(10), child: Text(country, style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold))),
                        ...assets.map((asset) {
                           final value = matrix[country]![asset]!;
                           return Container(
-                            padding: const EdgeInsets.all(12),
-                            color: _getCorrelationColor(value).withOpacity(0.15),
+                            padding: const EdgeInsets.all(10),
+                            color: _getCorrelationColor(value).withOpacity(0.08),
                             child: Text(
                               (value >= 0 ? '+' : '') + value.toStringAsFixed(2),
-                              style: TextStyle(color: _getCorrelationColor(value), fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+                              style: monoStyle(color: _getCorrelationColor(value), fontSize: 11, fontWeight: FontWeight.bold),
                               textAlign: TextAlign.center,
                             ),
                           );
@@ -747,23 +732,325 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                  ],
                ),
              ),
-             const SizedBox(height: 16),
-             const Text('Values represent directional correlation coefficient. Updated every 4 hours.', style: TextStyle(color: Colors.white24, fontSize: 9)),
           ],
         );
       },
       loading: () => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 80),
+        padding: EdgeInsets.symmetric(vertical: 60),
         child: Center(child: CircularProgressIndicator(color: gold)),
       ),
-      error: (e, stack) => _emptyGeoIntel('ERROR LOADING MATRIX'),
+      error: (e, stack) => _emptyGeoIntel('ERROR COMPILING MATRIX'),
     );
   }
 
   Color _getCorrelationColor(double val) {
-    if (val > 0.3) return const Color(0xFF00FF66);
-    if (val < -0.3) return const Color(0xFFFF0033);
+    if (val > 0.3) return buyGreen;
+    if (val < -0.3) return sellRed;
     return Colors.white38;
+  }
+
+  Widget _buildAIHubContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.smart_toy_outlined, color: gold, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'COGNITIVE AI HUB',
+              style: monoStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: themeSurface(context),
+                  border: Border.all(color: border),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CORE AGENTS', style: monoStyle(fontSize: 8, color: Colors.white38)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.circle, color: buyGreen, size: 6),
+                        const SizedBox(width: 8),
+                        Text('ALPHA • RUNNING', style: monoStyle(fontSize: 9, color: buyGreen, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text('THROUGHPUT', style: monoStyle(fontSize: 8, color: Colors.white38)),
+                    const SizedBox(height: 2),
+                    Text('148 tokens/s', style: monoStyle(fontSize: 9, color: Colors.white70)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 3,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: themeSurface(context),
+                  border: Border.all(color: border),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('COGNITIVE MODEL', style: monoStyle(fontSize: 8, color: Colors.white38)),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _activeModel = _activeModel == 'GEMINI-2.0-FLASH-EXP' ? 'GENOME-INFERENCE-V1' : 'GEMINI-2.0-FLASH-EXP';
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: gold.withOpacity(0.5)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_activeModel, style: monoStyle(fontSize: 9, color: gold, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.swap_horiz, color: gold, size: 10),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          height: 220,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0C0C0C),
+            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: ListView.builder(
+            itemCount: _chatHistory.length,
+            itemBuilder: (context, idx) {
+              final msg = _chatHistory[idx];
+              final isSys = msg['role'] == 'system';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(isSys ? '🤖 ' : '👤 ', style: const TextStyle(fontSize: 12)),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isSys ? const Color(0xFF141414) : gold.withOpacity(0.04),
+                          border: Border.all(color: isSys ? border : gold.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          msg['content']!,
+                          style: textStyle(color: Colors.white70, fontSize: 11, height: 1.4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF121212),
+                  border: Border.all(color: border),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: TextField(
+                  controller: _promptController,
+                  style: monoStyle(color: Colors.white, fontSize: 12),
+                  decoration: InputDecoration(
+                    hintText: 'Inquire intelligence network...',
+                    hintStyle: monoStyle(color: Colors.white24, fontSize: 11),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () {
+                if (_promptController.text.trim().isEmpty) return;
+                setState(() {
+                  _chatHistory.add({'role': 'user', 'content': _promptController.text});
+                  final q = _promptController.text.toLowerCase();
+                  _promptController.clear();
+                  
+                  String reply = 'Cognitive agents scanning. Correlation analysis is complete. Strong risk-off sentiment supports XAU/USD.';
+                  if (q.contains('gold') || q.contains('xau')) {
+                    reply = 'XAU/USD displays solid technical breakout above 2350. Order book depth shows institutional bids accumulating.';
+                  } else if (q.contains('risk') || q.contains('correlation')) {
+                    reply = 'High risk index detected on Middle East corridor. Correlation with Brent remains positive (+0.82). Recommend cautious position sizing.';
+                  }
+                  _chatHistory.add({'role': 'system', 'content': reply});
+                });
+              },
+              icon: const Icon(Icons.send, color: gold, size: 16),
+              style: IconButton.styleFrom(
+                backgroundColor: gold.withOpacity(0.08),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCSVAnalysesContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.insert_drive_file_outlined, color: gold, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'CSV JOURNAL ANALYTICS',
+              style: monoStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (!_isCsvUploaded) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E0E0E),
+              border: Border.all(color: border, style: BorderStyle.solid),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.upload_file, color: gold, size: 32),
+                const SizedBox(height: 12),
+                Text('UPLOAD TRADING JOURNAL CSV', style: monoStyle(fontSize: 10, color: Colors.white70)),
+                const SizedBox(height: 4),
+                Text('Supports MT4, MT5, and TradingView CSV exports', style: textStyle(fontSize: 9, color: Colors.white38)),
+                const SizedBox(height: 16),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isCsvUploaded = true;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: gold,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text('SELECT CSV FILE', style: monoStyle(fontSize: 9, color: Colors.black, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: themeSection(context),
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle, color: buyGreen, size: 14),
+                        const SizedBox(width: 8),
+                        Text('dtrade_history_may2026.csv', style: monoStyle(fontSize: 10, color: Colors.white70)),
+                      ],
+                    ),
+                    TextButton(
+                      onPressed: () => setState(() => _isCsvUploaded = false),
+                      child: Text('RESET', style: monoStyle(fontSize: 8, color: sellRed)),
+                    ),
+                  ],
+                ),
+                const Divider(color: border, height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _csvStatBox('WIN RATE', '67.4%', buyGreen),
+                    _csvStatBox('PROFIT FACTOR', '2.05', gold),
+                    _csvStatBox('AVG HOLD TIME', '38m', Colors.white70),
+                    _csvStatBox('MAX DD', '-3.2%', sellRed),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('EQUITY PERFORMANCE CURVE', style: monoStyle(fontSize: 9, color: Colors.white38)),
+          const SizedBox(height: 8),
+          Container(
+            height: 130,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0C0C0C),
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: CustomPaint(
+              painter: _CsvChartPainter(),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _csvStatBox(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: monoStyle(fontSize: 8, color: Colors.white38)),
+        const SizedBox(height: 4),
+        Text(value, style: monoStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+      ],
+    );
   }
 
   Widget _buildModuleContent(bool isWide) {
@@ -776,26 +1063,12 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         return _buildTraderGenomeContent();
       case 'COGNITIVE FITNESS':
         return _buildCognitiveFitnessContent();
+      case 'AI HUB':
+        return _buildAIHubContent();
+      case 'CSV ANALYSES':
+        return _buildCSVAnalysesContent();
       default:
         return _buildGeoIntelContent(isWide);
-    }
-  }
-
-  bool _isRefreshing = false;
-
-  void _handleRefresh() async {
-    setState(() => _isRefreshing = true);
-    // Refresh all relevant data providers
-    final dateStr = _getDateString(_selectedNewsDate);
-    ref.invalidate(forexNewsProvider(dateStr));
-    ref.invalidate(calendarProvider);
-    ref.invalidate(signalsProvider);
-    ref.invalidate(correlationMatrixProvider);
-    ref.invalidate(situationalReportProvider);
-    
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      setState(() => _isRefreshing = false);
     }
   }
 
@@ -811,130 +1084,77 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.bar_chart, color: gold, size: 24),
-                    const SizedBox(width: 12),
+                    const Icon(Icons.bar_chart, color: gold, size: 18),
+                    const SizedBox(width: 8),
                     Text('PATTERN INSIGHTS',
-                        style: TextStyle(
-                            color: themeText(context),
-                            fontSize: 15,
-                            fontFamily: 'AgencyFB',
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2)),
+                        style: monoStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('Behavioural detection engine — waiting for first trades',
-                    style: TextStyle(
-                        color: themeTextDim(context).withOpacity(0.5),
-                        fontSize: 13)),
+                Text('Behavioural pattern analytics engine',
+                    style: textStyle(
+                        color: Colors.white38,
+                        fontSize: 11)),
               ],
-            ),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: _isRefreshing ? null : _handleRefresh,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                      color: themeSurface(context),
-                      border: Border.all(color: themeBorder(context)),
-                      borderRadius: BorderRadius.circular(8)),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _isRefreshing
-                          ? const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(
-                                  color: gold, strokeWidth: 2))
-                          : Icon(Icons.refresh,
-                              color: themeText(context).withOpacity(0.8), size: 14),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            _isRefreshing ? 'REFRESHING...' : 'REFRESH',
-                            style: TextStyle(
-                              color: themeText(context),
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-              color: themeSurface(context).withOpacity(0.5),
-              border: Border.all(color: themeBorder(context)),
-              borderRadius: BorderRadius.circular(16)),
+              color: themeSurface(context),
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(8)),
           child: Column(
             children: [
               Row(
                 children: [
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                        color: gold.withOpacity(0.1),
+                        color: gold.withOpacity(0.05),
                         border: Border.all(color: gold.withOpacity(0.3)),
                         borderRadius: BorderRadius.circular(4)),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.analytics, color: gold, size: 14),
-                        SizedBox(width: 8),
+                        const Icon(Icons.analytics, color: gold, size: 12),
+                        const SizedBox(width: 6),
                         Text('RULE BASED ANALYSIS',
-                            style: TextStyle(
+                            style: monoStyle(
                                 color: gold,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1)),
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: Text('50 MORE TRADES TO UNLOCK STATISTICAL ANALYSIS',
-                        style: TextStyle(
-                            color: themeTextDim(context).withOpacity(0.4),
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1)),
+                    child: Text('30 MORE TRADES TO UNLOCK COGNITIVE ANALYTICS',
+                        style: monoStyle(
+                            color: Colors.white38,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
                   ),
-                  Text('0 / 50',
-                      style: TextStyle(
-                          color: themeTextDim(context).withOpacity(0.4),
-                          fontSize: 11,
+                  Text('0/30',
+                      style: monoStyle(
+                          color: Colors.white38,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold)),
                 ],
               ),
-              const SizedBox(height: 16),
-              Container(
-                height: 4,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(2)),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: 0.05,
-                  child: Container(
-                    decoration: BoxDecoration(
-                        color: gold, borderRadius: BorderRadius.circular(2)),
-                  ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(1),
+                child: LinearProgressIndicator(
+                  value: 0.0,
+                  backgroundColor: const Color(0xFF141414),
+                  valueColor: const AlwaysStoppedAnimation<Color>(gold),
+                  minHeight: 4,
                 ),
               ),
             ],
@@ -943,57 +1163,38 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         const SizedBox(height: 16),
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 80),
+          padding: const EdgeInsets.symmetric(vertical: 40),
           decoration: BoxDecoration(
-              color: themeSurface(context).withOpacity(0.3),
-              border: Border.all(color: themeBorder(context)),
-              borderRadius: BorderRadius.circular(16)),
+              color: themeSurface(context),
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(8)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                     color: gold.withOpacity(0.05),
                     border: Border.all(color: gold.withOpacity(0.1)),
-                    borderRadius: BorderRadius.circular(16)),
-                child: const Icon(Icons.analytics_outlined, color: gold, size: 48),
+                    borderRadius: BorderRadius.circular(50)),
+                child: const Icon(Icons.analytics_outlined, color: gold, size: 36),
               ),
-              const SizedBox(height: 24),
-              const Text('BUILDING YOUR PROFILE',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontFamily: 'AgencyFB',
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1)),
               const SizedBox(height: 16),
-              SizedBox(
-                width: 400,
-                child: Text(
-                  'Execute your first trades using the Trading Engine. Pattern detection activates automatically as your history grows.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: themeTextDim(context).withOpacity(0.5),
+              Text('PROFILING ARCHETYPE',
+                  style: monoStyle(
+                      color: Colors.white,
                       fontSize: 14,
-                      height: 1.5),
-                ),
-              ),
-              const SizedBox(height: 40),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _unlockCard('RULE-BASED PATTERNS', 'Unlocks at 1+ trades',
-                        Icons.onetwothree_outlined, true),
-                    const SizedBox(width: 16),
-                    _unlockCard('STATISTICAL ANALYSIS', 'Unlocks at 50+ trades',
-                        Icons.bar_chart_outlined, false),
-                    const SizedBox(width: 16),
-                    _unlockCard('PERSONAL AI MODEL', 'Unlocks at 200+ trades',
-                        Icons.smart_toy_outlined, false),
-                  ],
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 320,
+                child: Text(
+                  'Execute positions using the trading screen. Inference triggers automatically once enough trade density is logged.',
+                  textAlign: TextAlign.center,
+                  style: textStyle(
+                      color: Colors.white38,
+                      fontSize: 11,
+                      height: 1.4),
                 ),
               ),
             ],
@@ -1003,76 +1204,338 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     );
   }
 
-  Widget _unlockCard(String title, String status, IconData icon, bool isActive) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-          color: isActive ? gold.withOpacity(0.02) : Colors.transparent,
-          border: Border.all(
-              color: isActive ? gold.withOpacity(0.3) : themeBorder(context)),
-          borderRadius: BorderRadius.circular(12)),
+  Widget _buildTraderGenomeContent() {
+    final sbUser = sb.Supabase.instance.client.auth.currentUser;
+    if (sbUser == null) return _emptyGeoIntel('PLEASE LOGIN TO VIEW TRADER GENOME');
+
+    final genomeAsync = ref.watch(userGenomeProvider(sbUser.id));
+
+    return genomeAsync.when(
+      data: (data) {
+        if (data == null || data.isEmpty) {
+          return _buildLockedGenome();
+        }
+        return _buildUnlockedGenome(data);
+      },
+      loading: () => const Center(child: CircularProgressIndicator(color: gold)),
+      error: (err, stack) => _emptyGeoIntel('ERROR PARSING GENOME'),
+    );
+  }
+
+  Widget _buildLockedGenome() {
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: isActive ? gold : Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6)),
-            child: Icon(icon,
-                color: isActive ? Colors.black : Colors.white24, size: 20),
+          const SizedBox(height: 20),
+          AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      gold.withOpacity(0.1 * _pulseAnimation.value),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Center(
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF0C0C0C),
+                      border: Border.all(
+                        color: gold.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.lock_outline,
+                      color: gold,
+                      size: 24,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-          const SizedBox(height: 16),
-          Text(title,
-              style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white38,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 6),
-          Text(status,
-              style: TextStyle(
-                  color: isActive
-                      ? gold.withOpacity(0.7)
-                      : Colors.white.withOpacity(0.15),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          Text(
+            'GENOME PROFILE LOCKED',
+            style: monoStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Requires 30 trades to compile profile archetype.',
+            style: textStyle(
+              color: Colors.white38,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: 320,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: themeSurface(context),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'PROGRESS',
+                      style: monoStyle(
+                        color: Colors.white38,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '0 / 30',
+                      style: monoStyle(
+                        color: buyGreen,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(1),
+                  child: LinearProgressIndicator(
+                    value: 0.0,
+                    backgroundColor: const Color(0xFF141414),
+                    valueColor: const AlwaysStoppedAnimation<Color>(gold),
+                    minHeight: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildUnlockedGenome(Map<String, dynamic> data) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: gold.withOpacity(0.05),
+                shape: BoxShape.circle,
+                border: Border.all(color: gold.withOpacity(0.3)),
+              ),
+              child: const Icon(Icons.fingerprint, color: gold, size: 32),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data['archetype']?.toString().toUpperCase() ?? 'ARCHETYPE UNKNOWN',
+                    style: monoStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text('DNA mapped from ${data['trade_count'] ?? 0} trades',
+                    style: monoStyle(color: gold, fontSize: 9)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: MediaQuery.of(context).size.width > 900 ? 3 : 1,
+          childAspectRatio: 2.2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          children: [
+            _genomeStatCard('PRECISION', data['precision'] ?? '0%', Icons.gps_fixed),
+            _genomeStatCard('RISK FACTOR', data['risk_tolerance'] ?? 'MODERATE', Icons.warning_amber),
+            _genomeStatCard('RECOVERY RATE', data['recovery'] ?? '0%', Icons.autorenew),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _genomeStatCard(String title, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: themeSurface(context),
+        border: Border.all(color: themeBorder(context)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold)),
+              Icon(icon, color: gold.withOpacity(0.4), size: 14),
+            ],
+          ),
+          Text(value, style: monoStyle(color: gold, fontSize: 18, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCognitiveFitnessContent() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 20),
+        decoration: BoxDecoration(
+          color: themeSurface(context),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        buyGreen.withOpacity(0.1 * _pulseAnimation.value),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: Center(
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFF0C0C0C),
+                        border: Border.all(
+                          color: buyGreen.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.emoji_events_outlined,
+                        color: buyGreen,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'COGNITIVE STATUS: NO DATA',
+              style: monoStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 260,
+              child: Text(
+                'Minimum 1 executed trade required to compute cognitive metrics.',
+                textAlign: TextAlign.center,
+                style: textStyle(
+                  color: Colors.white38,
+                  fontSize: 11,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isRefreshing = false;
+
+  void _handleRefresh() async {
+    setState(() => _isRefreshing = true);
+    final dateStr = _getDateString(_selectedNewsDate);
+    ref.invalidate(forexNewsProvider(dateStr));
+    ref.invalidate(calendarProvider);
+    ref.invalidate(signalsProvider);
+    ref.invalidate(correlationMatrixProvider);
+    ref.invalidate(situationalReportProvider);
+    
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool isWide = constraints.maxWidth > 600;
+        final bool isWide = constraints.maxWidth > 700;
         if (isWide) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Fixed Icon Sidebar
               Container(
-                width: 85,
+                width: 80,
                 height: MediaQuery.of(context).size.height,
                 decoration: BoxDecoration(
-                  color: themeSurface(context).withOpacity(0.5),
+                  color: themeSurface(context),
                   border: Border(right: BorderSide(color: themeBorder(context))),
                 ),
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: _buildIntelModulesFixed(),
+                  child: Column(
+                    children: [
+                      _intelModuleSidebarItem(Icons.public, 'GEOINTEL', 'GEO'),
+                      _intelModuleSidebarItem(Icons.analytics_outlined, 'PATTERN INSIGHTS', 'PAT'),
+                      _intelModuleSidebarItem(Icons.fingerprint, 'TRADER GENOME', 'GEN'),
+                      _intelModuleSidebarItem(Icons.psychology_outlined, 'COGNITIVE FITNESS', 'COG'),
+                      _intelModuleSidebarItem(Icons.smart_toy_outlined, 'AI HUB', 'HUB'),
+                      _intelModuleSidebarItem(Icons.insert_drive_file_outlined, 'CSV ANALYSES', 'CSV'),
+                    ],
+                  ),
                 ),
               ),
-              // Main Content Area
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
                       _buildTopStats(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       _buildModuleContent(true),
                     ],
                   ),
@@ -1083,77 +1546,48 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
         } else {
           return Column(
             children: [
-              // Horizontal Mini Navigation for Mobile
               Container(
-                height: 64,
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
                   color: themeSurface(context),
                   border: Border(bottom: BorderSide(color: themeBorder(context))),
                 ),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Radar Trigger Icon with Premium Ripple & Glow Effect
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => setState(() => _isNavExpanded = !_isNavExpanded),
-                          borderRadius: BorderRadius.circular(10),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: _isNavExpanded 
-                                  ? gold.withOpacity(0.15) 
-                                  : Colors.white.withOpacity(0.02),
-                              border: Border.all(
-                                color: _isNavExpanded 
-                                    ? gold.withOpacity(0.5) 
-                                    : Colors.white.withOpacity(0.05)
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              boxShadow: _isNavExpanded ? [
-                                BoxShadow(
-                                  color: gold.withOpacity(0.2),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                )
-                              ] : [],
-                            ),
-                            child: Center(
-                              child: Icon(
-                                _isNavExpanded ? Icons.close : Icons.radar, 
-                                color: gold, 
-                                size: 20
-                              ),
-                            ),
+                    Row(
+                      children: [
+                        const Icon(Icons.dns_outlined, color: gold, size: 14),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedModule,
+                          style: monoStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                    Expanded(
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 300),
-                        opacity: _isNavExpanded ? 1.0 : 0.0,
-                        child: IgnorePointer(
-                          ignoring: !_isNavExpanded,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const SizedBox(width: 8),
-                                _intelModuleSidebarItem(Icons.public, 'GEOINTEL', 'GEOINTEL'),
-                                _intelModuleSidebarItem(Icons.analytics_outlined, 'PATTERN INSIGHTS', 'PATTERN'),
-                                _intelModuleSidebarItem(Icons.fingerprint, 'TRADER GENOME', 'GENOME'),
-                                _intelModuleSidebarItem(Icons.psychology_outlined, 'COGNITIVE FITNESS', 'COGNITIVE'),
-                                const SizedBox(width: 16),
-                              ],
+                    InkWell(
+                      onTap: _showModuleSelector,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: gold.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              'MODULES',
+                              style: monoStyle(fontSize: 8, color: gold, fontWeight: FontWeight.bold),
                             ),
-                          ),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.arrow_drop_down, color: gold, size: 12),
+                          ],
                         ),
                       ),
                     ),
@@ -1164,8 +1598,8 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                   children: [
-                    _buildTopStats(),
-                    const SizedBox(height: 24),
+                    _buildTopStatsMobile(),
+                    const SizedBox(height: 16),
                     _buildModuleContent(false),
                   ],
                 ),
@@ -1177,32 +1611,6 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     );
   }
 
-  Widget _buildIntelModulesFixed() {
-    return GestureDetector(
-      onTap: () => setState(() => _isNavExpanded = !_isNavExpanded),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        width: 85,
-        decoration: BoxDecoration(
-          color: themeSurface(context),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              ...[
-                _intelModuleSidebarItem(Icons.public, 'GEOINTEL', 'GEOINTEL'),
-                _intelModuleSidebarItem(Icons.analytics_outlined, 'PATTERN INSIGHTS', 'PATTERN'),
-                _intelModuleSidebarItem(Icons.fingerprint, 'TRADER GENOME', 'GENOME'),
-                _intelModuleSidebarItem(Icons.psychology_outlined, 'COGNITIVE FITNESS', 'COGNITIVE'),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _intelModuleSidebarItem(IconData icon, String title, String shortName) {
     bool isSelected = _selectedModule == title;
 
@@ -1211,11 +1619,10 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       child: GestureDetector(
         onTap: () => setState(() {
           _selectedModule = title;
-          _isNavExpanded = false; // Auto-collapse on selection
         }),
         child: Container(
           width: 70,
-          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          margin: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1223,49 +1630,29 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? gold.withOpacity(0.15)
-                      : Colors.transparent,
+                  color: isSelected ? gold.withOpacity(0.05) : Colors.transparent,
                   border: Border.all(
-                    color: isSelected
-                        ? gold.withOpacity(0.6)
-                        : Colors.white.withOpacity(0.02),
+                    color: isSelected ? gold : Colors.transparent,
                   ),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: isSelected ? [
-                    BoxShadow(
-                      color: gold.withOpacity(0.1),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    )
-                  ] : null,
+                  borderRadius: BorderRadius.circular(6),
                 ),
                 child: Center(
                   child: Icon(
                     icon,
-                    color: isSelected 
-                        ? gold 
-                        : themeText(context).withOpacity(0.40), // More visible but still faint
+                    color: isSelected ? gold : Colors.white38,
                     size: 16,
                   ),
                 ),
               ),
-              const SizedBox(height: 2),
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: (isSelected || _isNavExpanded) ? 1.0 : 0.0,
-                child: Text(
-                  shortName,
-                  style: TextStyle(
-                    color: isSelected ? gold : themeTextDim(context).withOpacity(0.3),
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 4),
+              Text(
+                shortName,
+                style: monoStyle(
+                  color: isSelected ? gold : Colors.white38,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
                 ),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -1274,102 +1661,86 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     );
   }
 
-
   Widget _buildTopStats() {
     return Column(
       children: [
         Row(
           children: [
-      // Tension Index Box
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: gold.withOpacity(0.05),
-          border: Border.all(color: gold.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Text('GLOBAL TENSION INDEX',
-                style: TextStyle(
-                    color: gold.withOpacity(0.7),
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2)),
-            const SizedBox(width: 14),
-            const Text('10.0',
-                style: TextStyle(
-                    color: gold,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace')),
-            const SizedBox(width: 8),
-            AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00FF66).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF00FF66).withOpacity(0.2 * _pulseAnimation.value),
-                        blurRadius: 4 * _pulseAnimation.value,
-                        spreadRadius: 1 * _pulseAnimation.value,
-                      )
-                    ],
-                  ),
-                  child: const Text('+LIVE',
-                      style: TextStyle(
-                          color: Color(0xFF00FF66),
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold)),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-            const SizedBox(width: 12),
-            // Navigation Tabs (Strictly for GEOINTEL)
-            if (_selectedModule == 'GEOINTEL')
-              Expanded(
-                child: Container(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _topTab('MAP'),
-                        _topTab('NEWS'),
-                        _topTab('CALENDAR'),
-                        _topTab('SIGNALS'),
-                        _topTab('MATRIX'),
-                      ],
+            // Compact GTI pill
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: gold.withOpacity(0.04),
+                border: Border.all(color: gold.withOpacity(0.25)),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('GTI',
+                      style: monoStyle(
+                          color: Colors.white38, fontSize: 7, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 6),
+                  Text('10.0',
+                      style: monoStyle(
+                          color: gold, fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 5),
+                  Container(
+                    width: 5, height: 5,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: buyGreen,
+                      boxShadow: [BoxShadow(color: buyGreen.withOpacity(0.6), blurRadius: 4)],
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Status pills inline
+            _miniStatus('SIGNALS', '4', gold),
+            const SizedBox(width: 6),
+            _miniStatus('CRITICAL', '3', sellRed),
+            const SizedBox(width: 6),
+            _miniStatus('FEEDS', '18', buyGreen),
+            const Spacer(),
+            if (_selectedModule == 'GEOINTEL')
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _topTab('MAP'),
+                    _topTab('NEWS'),
+                    _topTab('CALENDAR'),
+                    _topTab('SIGNALS'),
+                    _topTab('MATRIX'),
+                  ],
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 12),
-        // Status Bar
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _statusBarItem('AI ANALYTICS', 'ONLINE', const Color(0xFF00FF66)),
-                _statusBarItem('ACTIVE SIGNALS', '5', gold),
-                _statusBarItem('HOTSPOTS', '0 CRITICAL', const Color(0xFFFF0033)),
-                _statusBarItem('NEWS FEEDS', 'ACTIVE', const Color(0xFF00FF66)),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(height: 1, color: themeBorder(context).withOpacity(0.3)),
+        const SizedBox(height: 6),
+        const Divider(color: border, height: 8),
       ],
+    );
+  }
+
+  Widget _miniStatus(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.05),
+        border: Border.all(color: color.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: monoStyle(color: Colors.white38, fontSize: 7, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 4),
+          Text(value, style: monoStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
@@ -1381,19 +1752,20 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             border: Border.all(color: themeBorder(context)),
-            color: themeSection(context).withOpacity(0.5),
+            color: themeSurface(context),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Column(
             children: [
               Text('GLOBAL TENSION INDEX',
-                  style: TextStyle(color: themeTextDim(context), fontSize: 9, letterSpacing: 1.2)),
+                  style: monoStyle(color: Colors.white38, fontSize: 8, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              const Text('71.4', style: TextStyle(color: gold, fontSize: 22, fontWeight: FontWeight.bold)),
+              Text('10.0', style: monoStyle(color: gold, fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
         if (_selectedModule == 'GEOINTEL') ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(children: [
@@ -1416,91 +1788,54 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       child: GestureDetector(
         onTap: () => setState(() => _selectedSubModule = label),
         child: Container(
-          margin: const EdgeInsets.only(right: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          margin: const EdgeInsets.only(right: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: isSelected ? themeSection(context) : Colors.transparent,
+            color: isSelected ? gold.withOpacity(0.04) : Colors.transparent,
             border: Border(
                 bottom: BorderSide(
                     color: isSelected ? gold : Colors.transparent, width: 1.5)),
           ),
           child: Text(label,
-              style: TextStyle(
-                  color: isSelected ? gold : themeTextDim(context),
+              style: monoStyle(
+                  color: isSelected ? gold : Colors.white38,
                   fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5)),
+                  fontWeight: FontWeight.bold)),
         ),
       ),
     );
   }
 
-  Widget _statusBarItem(String label, String value, Color valueColor) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 32),
-      child: Row(
-        children: [
-          Text(label,
-              style: TextStyle(
-                  color: themeTextDim(context).withOpacity(0.4),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5)),
-          const SizedBox(width: 10),
-          Text(value,
-              style: TextStyle(
-                  color: valueColor,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.5)),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildActiveHotspots() {
     return Container(
       decoration: BoxDecoration(
-        color: themeSurface(context).withOpacity(0.3),
-        border: Border.all(color: themeBorder(context).withOpacity(0.5)),
+        color: themeSurface(context),
+        border: Border.all(color: themeBorder(context)),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ACTIVE HOTSPOTS',
-                    style: TextStyle(
-                        color: themeTextDim(context).withOpacity(0.8),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2)),
+                Text('ACTIVE HOTSPOTS', style: monoStyle(color: Colors.white70, fontSize: 8, fontWeight: FontWeight.bold)),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFFFF0033).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4)),
-                  child: const Text('9',
-                      style: TextStyle(
-                          color: Color(0xFFFF0033),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold)),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: sellRed.withOpacity(0.1), border: Border.all(color: sellRed.withOpacity(0.3)), borderRadius: BorderRadius.circular(3)),
+                  child: Text('3', style: monoStyle(color: sellRed, fontSize: 8, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
           ),
-          Container(height: 1, color: themeBorder(context).withOpacity(0.5)),
-          _hotspotItem('WAR / GEO • IRAN', 'Hormuz Blockade', 88),
-          _hotspotItem('WAR / GEO • UKRAINE', 'Drone Campaign', 82),
-          _hotspotItem('WAR / GEO • RUSSIA', 'Sanctions Expand', 85),
-          _hotspotItem('WAR / GEO • NORTH KOREA', 'Missile Launch', 79),
-          _hotspotItem('WAR / GEO • ISRAEL', 'Regional Tension', 76),
-          const SizedBox(height: 12),
+          const Divider(color: border, height: 1),
+          _hotspotItem('WAR / GEO • IRAN', 'Hormuz Strait Monitoring', 88),
+          _hotspotItem('WAR / GEO • UKRAINE', 'Energy Grid Interdictions', 82),
+          _hotspotItem('WAR / GEO • RUSSIA', 'Capital Flight Restrictions', 76),
         ],
       ),
     );
@@ -1508,32 +1843,21 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
 
   Widget _hotspotItem(String category, String title, int score) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: themeBorder(context)))),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: border))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(category,
-              style: const TextStyle(
-                  color: Color(0xFFFF0033),
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1)),
+          Text(category, style: monoStyle(color: sellRed, fontSize: 7, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 3),
+          Text(title, style: textStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(title,
-              style: TextStyle(
-                  color: themeText(context),
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
           Row(
             children: [
-              Text('RISK SCORE:',
-                  style: TextStyle(color: themeTextDim(context).withOpacity(0.7), fontSize: 10)),
-              const SizedBox(width: 8),
-              Text(score.toString(),
-                  style: TextStyle(color: themeText(context).withOpacity(0.7), fontSize: 11)),
+              Text('RISK:', style: monoStyle(color: Colors.white38, fontSize: 7)),
+              const SizedBox(width: 4),
+              Text(score.toString(), style: monoStyle(color: gold, fontSize: 8, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -1542,217 +1866,62 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
   }
 
   Widget _buildMapArea() {
-    return Center(
-      child: Container(
-        height: 600,
-        width: 1260, // Tactical aspect ratio for the elliptical asset
-        decoration: BoxDecoration(
-          color: const Color(0xFF070707),
-          border: Border.all(color: gold.withOpacity(0.4), width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.blueAccent.withOpacity(0.15),
-              blurRadius: 50,
-              spreadRadius: 10,
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Base Map Layer - Using high-res asset
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.95,
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.mode(
-                    Colors.blueAccent.withOpacity(0.40), // Brighter neon intensity
-                    BlendMode.screen,
-                  ),
-                  child: Image.asset(
-                    'assets/images/world_map.png',
-                    fit: BoxFit.contain, // Fit the entire elliptical globe without cropping
-                  ),
-                ),
-              ),
-            ),
-            // Scan Line Effect
-            AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                return Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Opacity(
-                    opacity: 0.3,
-                    child: Container(
-                      height: 2,
-                      decoration: BoxDecoration(
-                        boxShadow: [
-                          BoxShadow(color: gold.withOpacity(0.5), blurRadius: 10, spreadRadius: 2)
-                        ],
-                        gradient: LinearGradient(
-                          colors: [Colors.transparent, gold.withOpacity(0.5), Colors.transparent],
-                        ),
-                      ),
-                      transform: Matrix4.translationValues(0, 600 * _pulseController.value, 0),
-                    ),
-                  ),
-                );
-              },
-            ),
-            
-            // Regional Intelligence Nodes - Data Driven
-            ...ref.watch(regionalRiskProvider).when(
-              data: (risks) => [
-                // Layer 1: Regional Heat/Shading
-                ...risks.map((r) => _regionGlow(r.top, r.left, r.color, _hoveredRegion == r.region)),
-                // Layer 2: Interactive Nodes
-                ...risks.map((r) => _hotspotNode(r.top, r.left, r.color, r.region, r.riskIndex)),
-              ],
-              loading: () => [],
-              error: (_, __) => [],
-            ),
-
-            // Interactive Popup
-            if (_hoveredRegion != null)
-              _buildInteractivePopup(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _regionGlow(double top, double left, Color color, bool isHovered) {
-    return Positioned(
-      top: top - 40,
-      left: left - 40,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 400),
-        opacity: isHovered ? 0.4 : 0.15,
-        child: Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [color, Colors.transparent],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _hotspotNode(double? top, double? left, Color c, String region, int risk, {double? right, double? bottom}) {
-    return Positioned(
-      top: top,
-      left: left,
-      right: right,
-      bottom: bottom,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (e) {
-          final RenderBox box = context.findRenderObject() as RenderBox;
-          final pos = box.localToGlobal(Offset.zero);
-          setState(() {
-            _hoveredRegion = region;
-            _hoveredRisk = risk;
-            // Calculate a good spot for the popup
-            double px = (left ?? (800 - (right ?? 0))) + 20;
-            double py = (top ?? (600 - (bottom ?? 0))) - 40;
-            _hoveredPos = Offset(px, py);
-          });
-        },
-        onExit: (e) => setState(() {
+    return _GeoIntelMapWidget(
+      pulseController: _pulseController,
+      pulseAnimation: _pulseAnimation,
+      hoveredRegion: _hoveredRegion,
+      hoveredRisk: _hoveredRisk,
+      hoveredPos: _hoveredPos,
+      onHover: (region, risk, pos) {
+        setState(() {
+          _hoveredRegion = region;
+          _hoveredRisk = risk;
+          _hoveredPos = pos;
+        });
+      },
+      onHoverExit: () {
+        setState(() {
           _hoveredRegion = null;
-        }),
-        child: AnimatedBuilder(
-          animation: _pulseAnimation,
-          builder: (context, child) {
-            return Container(
-              width: 18 * _pulseAnimation.value,
-              height: 18 * _pulseAnimation.value,
-              decoration: BoxDecoration(
-                color: c.withOpacity(0.6),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: c.withOpacity(0.4),
-                    blurRadius: 15 * _pulseAnimation.value,
-                    spreadRadius: 5 * _pulseAnimation.value,
-                  )
-                ],
-              ),
-              child: Center(
-                child: Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+        });
+      },
+      gdeltAsync: ref.watch(gdeltStreamProvider),
+      buildInteractivePopup: _hoveredRegion != null ? _buildInteractivePopup : null,
     );
   }
+
+
 
   Widget _buildInteractivePopup() {
     return Positioned(
       left: (_hoveredPos?.dx ?? 0),
       top: (_hoveredPos?.dy ?? 0),
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 150),
         opacity: _hoveredRegion != null ? 1.0 : 0.0,
         child: Container(
-          width: 220,
-          padding: const EdgeInsets.all(16),
+          width: 160,
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: const Color(0xFF0A0A0A).withOpacity(0.95),
-            border: Border.all(color: gold.withOpacity(0.3)),
+            border: Border.all(color: gold.withOpacity(0.4)),
             borderRadius: BorderRadius.circular(4),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, spreadRadius: 10),
-            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(_hoveredRegion!.toUpperCase(),
-                  style: const TextStyle(
+                  style: monoStyle(
                       color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'AgencyFB',
-                      letterSpacing: 2)),
-              const SizedBox(height: 8),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Risk Index:',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.5), 
-                          fontSize: 11, 
-                          fontWeight: FontWeight.bold)),
-                  Text('$_hoveredRisk',
-                      style: const TextStyle(
-                          color: gold, 
-                          fontSize: 18, 
-                          fontWeight: FontWeight.bold, 
-                          fontFamily: 'monospace')),
+                  Text('Risk Index:', style: monoStyle(color: Colors.white38, fontSize: 8)),
+                  Text('$_hoveredRisk', style: monoStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold)),
                 ],
-              ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: (_hoveredRisk ?? 0) / 100,
-                backgroundColor: Colors.white.withOpacity(0.05),
-                color: (_hoveredRisk ?? 0) > 80 ? Colors.redAccent : gold,
-                minHeight: 2,
               ),
             ],
           ),
@@ -1760,14 +1929,15 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
       ),
     );
   }
+
   Widget _buildAIGeneratedSignals() {
     return Container(
       decoration: BoxDecoration(
-        color: themeSurface(context).withOpacity(0.2),
-        border: Border.all(color: themeBorder(context).withOpacity(0.5)),
+        color: themeSurface(context),
+        border: Border.all(color: themeBorder(context)),
         borderRadius: BorderRadius.circular(8),
       ),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1776,528 +1946,814 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
             children: [
               Row(
                 children: [
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
+                  const Icon(Icons.psychology_outlined, color: gold, size: 16),
+                  const SizedBox(width: 8),
+                  Text('AI SITUATIONAL REPORT',
+                      style: monoStyle(
                           color: gold,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: gold.withOpacity(0.4 * _pulseAnimation.value),
-                              blurRadius: 8 * _pulseAnimation.value,
-                              spreadRadius: 2 * _pulseAnimation.value,
-                            )
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  const Text('AI INTELLIGENCE',
-                      style: TextStyle(
-                          color: gold,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5)),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
               Row(
                 children: [
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00FF66),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00FF66).withOpacity(0.6 * _pulseAnimation.value),
-                              blurRadius: 10 * _pulseAnimation.value,
-                              spreadRadius: 3 * _pulseAnimation.value,
-                            )
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 10),
-                  const Text('READY',
-                      style: TextStyle(
-                          color: Color(0xFF00FF66),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0)),
+                  const Icon(Icons.circle, color: buyGreen, size: 6),
+                  const SizedBox(width: 6),
+                  Text('ACTIVE', style: monoStyle(color: buyGreen, fontSize: 8, fontWeight: FontWeight.bold)),
                 ],
               )
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: gold.withOpacity(0.02),
-              border: const Border(left: BorderSide(color: gold, width: 3)),
-              gradient: LinearGradient(
-                colors: [gold.withOpacity(0.05), Colors.transparent],
-                stops: const [0.0, 0.4],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
+              color: const Color(0xFF0C0C0C),
+              border: const Border(left: BorderSide(color: gold, width: 2)),
             ),
             child: ref.watch(situationalReportProvider).when(
                   data: (report) => Text(
                     report,
-                    style: TextStyle(
-                      color: themeText(context).withOpacity(0.9),
-                      fontSize: 15,
-                      height: 1.6,
-                      fontFamily: 'serif',
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.3,
+                    style: textStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      height: 1.45,
                     ),
                   ),
                   loading: () => const Center(
-                      child:
-                          CircularProgressIndicator(color: gold, strokeWidth: 2)),
-                  error: (err, _) => const Text(
-                    'Intelligence feed currently unavailable. Strategic flow monitoring continuous.',
-                    style: TextStyle(color: Colors.white38, fontSize: 13),
+                      child: CircularProgressIndicator(color: gold, strokeWidth: 1.5)),
+                  error: (err, _) => Text(
+                    'AI report feeds offline. Monitoring risk matrices continuously.',
+                    style: monoStyle(color: Colors.white38, fontSize: 9),
                   ),
                 ),
-          ),
-          const SizedBox(height: 32),
-          Text('GENERATED SIGNALS',
-              style: TextStyle(
-                  color: themeTextDim(context).withOpacity(0.5),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2.0)),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            decoration: BoxDecoration(
-              color: gold.withOpacity(0.05),
-              border: Border.all(color: gold.withOpacity(0.2)),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline, color: gold, size: 18),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    'Long-term AI directional bias — for educational purposes only. Not financial advice. Not for short-term trading.',
-                    style: TextStyle(
-                      color: gold.withOpacity(0.8),
-                      fontSize: 11,
-                      height: 1.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTraderGenomeContent() {
-    final sbUser = sb.Supabase.instance.client.auth.currentUser;
-    if (sbUser == null) return _emptyGeoIntel('PLEASE LOGIN TO VIEW GENOME');
+// ─────────────────────────────────────────────────────────────────────────────
+// GeoIntel World Map Widget
+// Renders an SVG world map with country risk color-coding, pulsing GDELT
+// hotspot markers, elliptical gold border, and GDELT LIVE badge.
+// ─────────────────────────────────────────────────────────────────────────────
 
-    final genomeAsync = ref.watch(userGenomeProvider(sbUser.id));
+class _GeoIntelMapWidget extends StatefulWidget {
+  final AnimationController pulseController;
+  final Animation<double> pulseAnimation;
+  final String? hoveredRegion;
+  final int? hoveredRisk;
+  final Offset? hoveredPos;
+  final void Function(String region, int risk, Offset pos) onHover;
+  final VoidCallback onHoverExit;
+  final AsyncValue<GdeltData> gdeltAsync;
+  final Widget Function()? buildInteractivePopup;
 
-    return genomeAsync.when(
-      data: (data) {
-        if (data == null || data.isEmpty) {
-          return _buildLockedGenome();
-        }
-        return _buildUnlockedGenome(data);
-      },
-      loading: () => const Center(child: CircularProgressIndicator(color: gold)),
-      error: (err, stack) => _emptyGeoIntel('ERROR LOADING GENOME'),
-    );
+  const _GeoIntelMapWidget({
+    required this.pulseController,
+    required this.pulseAnimation,
+    required this.hoveredRegion,
+    required this.hoveredRisk,
+    required this.hoveredPos,
+    required this.onHover,
+    required this.onHoverExit,
+    required this.gdeltAsync,
+    this.buildInteractivePopup,
+  });
+
+  @override
+  State<_GeoIntelMapWidget> createState() => _GeoIntelMapWidgetState();
+}
+
+class _GeoIntelMapWidgetState extends State<_GeoIntelMapWidget> with TickerProviderStateMixin {
+  late AnimationController _ringController;
+  late Animation<double> _ringAnimation;
+  late AnimationController _gdeltDotController;
+  late Animation<double> _gdeltDotAnimation;
+
+  Color _getRiskColor(double score) {
+    if (score >= 9) return const Color(0xFF8B2635); // deep crimson
+    if (score >= 7) return const Color(0xFFB85C38); // dark orange
+    if (score >= 5) return const Color(0xFF8B6914); // dark amber
+    if (score >= 3) return const Color(0xFF2D6A4F); // forest green
+    return const Color(0xFF1A3A2A);                 // dark green
   }
 
-  Widget _buildLockedGenome() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 40),
-          // Blowing Lock Icon
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return Container(
-                width: 140,
-                height: 140,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      gold.withOpacity(0.15 * _pulseAnimation.value),
-                      Colors.transparent,
+  // Hotspots with lat/lon → map normalized coords (0-1 range)
+  // Mercator-like projection: x = (lon+180)/360, y = (90-lat)/180
+  Offset _latLonToMap(double lat, double lon) {
+    final x = (lon + 180) / 360;
+    final y = (90 - lat) / 180;
+    return Offset(x, y);
+  }
+
+  // Hardcoded hotspot list with geo coords from GDELT fallback
+  static const List<Map<String, dynamic>> _hotspots = [
+    {'name': 'United States', 'lat': 38.0, 'lon': -97.0, 'score': 4.2, 'label': 'US', 'color': Color(0xFF4A90E2)},
+    {'name': 'Venezuela', 'lat': 8.0, 'lon': -66.0, 'score': 6.0, 'label': 'VE', 'color': Color(0xFF10B981)},
+    {'name': 'Germany', 'lat': 51.16, 'lon': 10.45, 'score': 2.0, 'label': 'DE', 'color': Color(0xFFF5A623)},
+    {'name': 'Ukraine', 'lat': 49.0, 'lon': 31.0, 'score': 8.5, 'label': 'UA', 'color': Color(0xFFFF1744)},
+    {'name': 'Russia', 'lat': 58.0, 'lon': 45.0, 'score': 9.2, 'label': 'RU', 'color': Color(0xFF8B2635)},
+    {'name': 'Turkey', 'lat': 39.0, 'lon': 35.0, 'score': 5.0, 'label': 'TR', 'color': Color(0xFFF5A623)},
+    {'name': 'Iran', 'lat': 32.0, 'lon': 53.0, 'score': 8.8, 'label': 'IR', 'color': Color(0xFF10B981)},
+    {'name': 'Saudi Arabia', 'lat': 24.0, 'lon': 45.0, 'score': 4.5, 'label': 'SA', 'color': Color(0xFF10B981)},
+    {'name': 'China', 'lat': 36.0, 'lon': 104.0, 'score': 5.8, 'label': 'CN', 'color': Color(0xFFF5A623)},
+    {'name': 'North Korea', 'lat': 40.3, 'lon': 127.5, 'score': 7.5, 'label': 'KP', 'color': Color(0xFFFF1744)},
+    {'name': 'Japan', 'lat': 36.0, 'lon': 138.0, 'score': 1.8, 'label': 'JP', 'color': Color(0xFF4A90E2)},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _ringController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+    _ringAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_ringController);
+
+    _gdeltDotController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _gdeltDotAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(_gdeltDotController);
+  }
+
+  @override
+  void dispose() {
+    _ringController.dispose();
+    _gdeltDotController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final h = (w * 0.42).clamp(200.0, 300.0);
+
+        // Merge GDELT hotspots if live
+        final List<Map<String, dynamic>> hotspots = List.from(_hotspots);
+        widget.gdeltAsync.whenData((gdelt) {
+          // Update scores from GDELT live data
+          // Merge live GDELT geo events (first 5 unique locations)
+          int gdeltAdded = 0;
+          for (final ghs in gdelt.hotspots) {
+            if (gdeltAdded >= 5) break;
+            final ghLat = ghs.lat;
+            final ghLon = ghs.lon;
+            final exists = hotspots.any((entry) {
+              final eLat = entry['lat'] as double;
+              final eLon = entry['lon'] as double;
+              return (eLat - ghLat).abs() < 2.0 && (eLon - ghLon).abs() < 2.0;
+            });
+            if (!exists) {
+              hotspots.add({
+                'name': ghs.locationName,
+                'lat': ghs.lat,
+                'lon': ghs.lon,
+                'score': 6.5,
+                'label': '${ghs.eventCount}',
+              });
+              gdeltAdded++;
+            }
+          }
+        });
+
+
+        final isLive = widget.gdeltAsync.whenOrNull(data: (d) => d.isLive) ?? false;
+
+        return Container(
+          height: h,
+          width: w,
+          decoration: BoxDecoration(
+            color: const Color(0xFF080808), // near-black background
+            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Stack(
+            children: [
+              // ── Radar Grid Lines ──
+              Positioned.fill(
+                child: CustomPaint(painter: _RadarGridPainter()),
+              ),
+
+              // ── World Map SVG (color overlay) ──
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: Stack(
+                    children: [
+                      // Base map image with high opacity
+                      Positioned.fill(
+                        child: Image.asset(
+                          'assets/images/world_map.png',
+                          fit: BoxFit.fill,
+                          opacity: const AlwaysStoppedAnimation(0.9),
+                        ),
+                      ),
+                      // Risk overlay – colored rectangles for major regions
+                      ..._buildCountryRiskOverlays(w, h),
                     ],
                   ),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF131118),
-                      border: Border.all(
-                        color: gold.withOpacity(0.3),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: gold.withOpacity(0.1),
-                          blurRadius: 20 * _pulseAnimation.value,
-                          spreadRadius: 5 * _pulseAnimation.value,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.lock_outline,
-                      color: gold,
-                      size: 32,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 40),
-          // Genome Locked Text
-          const Text(
-            'GENOME LOCKED',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontFamily: 'serif',
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 12),
-          RichText(
-            text: TextSpan(
-              style: TextStyle(
-                color: themeTextDim(context).withOpacity(0.7),
-                fontSize: 16,
-                letterSpacing: 0.5,
               ),
-              children: const [
-                TextSpan(text: 'Need '),
-                TextSpan(
-                  text: '30 trades',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                TextSpan(text: ' to classify your archetype.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 48),
-          // Progress Card
-          Container(
-            width: 400,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0C1B1E).withOpacity(0.5),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'PROGRESS',
-                      style: TextStyle(
-                        color: themeTextDim(context).withOpacity(0.5),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const Text(
-                      '0 / 30',
-                      style: TextStyle(
-                        color: Color(0xFF00FF66),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'AgencyFB',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Custom Progress Bar
-                Stack(
-                  children: [
-                    Container(
-                      height: 8,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    Container(
-                      height: 8,
-                      width: 0, // 0 progress for now
-                      decoration: BoxDecoration(
-                        color: gold,
-                        borderRadius: BorderRadius.circular(4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: gold.withOpacity(0.5),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Center(
-                  child: Text(
-                    '30 more trades to unlock',
-                    style: TextStyle(
-                      color: themeTextDim(context).withOpacity(0.4),
-                      fontSize: 11,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 60),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildUnlockedGenome(Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: gold.withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: gold.withOpacity(0.3)),
-              ),
-              child: const Icon(Icons.fingerprint, color: gold, size: 40),
-            ),
-            const SizedBox(width: 24),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data['archetype']?.toString().toUpperCase() ?? 'TRADER ARCHETYPE',
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                const SizedBox(height: 4),
-                Text('DNA Profile generated from ${data['trade_count'] ?? 0} trades',
-                    style: TextStyle(color: gold.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 40),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: MediaQuery.of(context).size.width > 900 ? 3 : 1,
-          childAspectRatio: 1.5,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          children: [
-            _genomeStatCard('PRECISION', data['precision'] ?? '0%', Icons.gps_fixed),
-            _genomeStatCard('RISK TOLERANCE', data['risk_tolerance'] ?? 'MODERATE', Icons.warning_amber),
-            _genomeStatCard('RECOVERY RATE', data['recovery'] ?? '0%', Icons.autorenew),
-          ],
-        ),
-        const SizedBox(height: 32),
-        _cardWrapper(
-          icon: Icons.psychology,
-          title: 'PSYCHOLOGICAL TRAITS',
-          child: Column(
-            children: (data['traits'] as List? ?? ['Analyzing behavior...']).map((t) => _traitRow(t.toString())).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _genomeStatCard(String title, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: themeSurface(context),
-        border: Border.all(color: themeBorder(context)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title, style: TextStyle(color: themeTextDim(context), fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-              Icon(icon, color: gold.withOpacity(0.5), size: 16),
-            ],
-          ),
-          Text(value, style: const TextStyle(color: gold, fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-        ],
-      ),
-    );
-  }
-
-  Widget _traitRow(String trait) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle_outline, color: Color(0xFF00FF66), size: 14),
-          const SizedBox(width: 12),
-          Text(trait, style: TextStyle(color: themeText(context), fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _cardWrapper({required IconData icon, required String title, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: themeSection(context),
-        border: Border.all(color: themeBorder(context)),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: gold, size: 20),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  color: themeText(context),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCognitiveFitnessContent() {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 40),
-        margin: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-          color: themeSurface(context).withOpacity(0.3),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: themeBorder(context).withOpacity(0.5)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Glowing Trophy Icon
-            AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        const Color(0xFF00FF66).withOpacity(0.1 * _pulseAnimation.value),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                  child: Center(
+              // ── Scanline ──
+              AnimatedBuilder(
+                animation: widget.pulseController,
+                builder: (context, _) {
+                  return Positioned(
+                    top: h * widget.pulseController.value,
+                    left: 0, right: 0,
                     child: Container(
-                      width: 60,
-                      height: 60,
+                      height: 1,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF0C1B1E),
-                        border: Border.all(
-                          color: const Color(0xFF00FF66).withOpacity(0.2),
-                          width: 1,
-                        ),
+                        gradient: LinearGradient(colors: [
+                          Colors.transparent,
+                          gold.withOpacity(0.15),
+                          Colors.transparent,
+                        ]),
                       ),
-                      child: const Icon(
-                        Icons.emoji_events_outlined,
-                        color: Color(0xFF33635A),
-                        size: 28,
+                    ),
+                  );
+                },
+              ),
+
+              // ── Hotspot Markers ──
+              ...hotspots.map((hs) {
+                final pos = _latLonToMap(hs['lat'] as double, hs['lon'] as double);
+                final px = pos.dx * w;
+                final py = pos.dy * h;
+                final score = (hs['score'] as double);
+                final isHigh = score >= 7.5;
+                final dotColor = hs['color'] as Color? ?? (isHigh ? const Color(0xFFFF1744) : gold);
+
+                return Positioned(
+                  left: px - 12,
+                  top: py - 12,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onEnter: (_) => widget.onHover(
+                      hs['name'] as String,
+                      score.round(),
+                      Offset(px + 8, py - 36),
+                    ),
+                    onExit: (_) => widget.onHoverExit(),
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: AnimatedBuilder(
+                        animation: _ringAnimation,
+                        builder: (context, _) {
+                          final ring = _ringAnimation.value;
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Pulsing outer ring (light, no highlight)
+                              Container(
+                                width: 8 + 20 * ring,
+                                height: 8 + 20 * ring,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: dotColor.withOpacity((1 - ring) * 0.25),
+                                    width: 1.0,
+                                  ),
+                                ),
+                              ),
+                              // Inner solid dot (light opacity, no glow)
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: dotColor.withOpacity(0.75),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
                 );
-              },
-            ),
-            const SizedBox(height: 32),
-            // Title
-            const Text(
-              'COGNITIVE STATUS: NO DATA',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontFamily: 'serif',
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.0,
+              }),
+
+              // ── Country Code Labels ──
+              ...hotspots.map((hs) {
+                final pos = _latLonToMap(hs['lat'] as double, hs['lon'] as double);
+                final px = pos.dx * w;
+                final py = pos.dy * h;
+                final code = hs['label'] as String;
+                final score = (hs['score'] as double);
+                final isHigh = score >= 7.5;
+                final dotColor = hs['color'] as Color? ?? (isHigh ? const Color(0xFFFF1744) : gold);
+                return Positioned(
+                  left: px + 8,
+                  top: py - 12,
+                  child: IgnorePointer(
+                    child: Text(
+                      code,
+                      style: monoStyle(
+                        color: dotColor.withOpacity(0.75),
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+
+              // ── Hover Popup ──
+              if (widget.hoveredRegion != null && widget.buildInteractivePopup != null)
+                widget.buildInteractivePopup!(),
+
+              // ── GDELT LIVE Badge ──
+              Positioned(
+                top: 10,
+                left: 12,
+                child: AnimatedBuilder(
+                  animation: _gdeltDotAnimation,
+                  builder: (context, _) {
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: buyGreen.withOpacity(_gdeltDotAnimation.value),
+                            boxShadow: [
+                              BoxShadow(
+                                color: buyGreen.withOpacity(0.5 * _gdeltDotAnimation.value),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          isLive ? 'GDELT LIVE · 18 FEEDS' : 'GDELT · CACHED',
+                          style: monoStyle(
+                            fontSize: 8,
+                            color: isLive ? buyGreen : Colors.white38,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.06,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+
+              // ── Risk Legend ──
+              Positioned(
+                bottom: 10,
+                right: 12,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _legendDot(const Color(0xFF8B2635), '9–10'),
+                    const SizedBox(width: 8),
+                    _legendDot(const Color(0xFFB85C38), '7–8'),
+                    const SizedBox(width: 8),
+                    _legendDot(const Color(0xFF8B6914), '5–6'),
+                    const SizedBox(width: 8),
+                    _legendDot(const Color(0xFF2D6A4F), '1–4'),
+                  ],
+                ),
+              ),
+
+              // ── Active Hotspots Count Badge ──
+              Positioned(
+                top: 10,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: sellRed.withOpacity(0.08),
+                    border: Border.all(color: sellRed.withOpacity(0.4)),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_on, color: sellRed, size: 9),
+                      const SizedBox(width: 3),
+                      Text('${hotspots.where((h) => (h['score'] as double) >= 7.5).length} CRITICAL',
+                        style: monoStyle(color: sellRed, fontSize: 8, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 6, height: 6, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+        const SizedBox(width: 3),
+        Text(label, style: monoStyle(color: Colors.white38, fontSize: 7)),
+      ],
+    );
+  }
+
+  List<Widget> _buildCountryRiskOverlays(double w, double h) {
+    // Approximate country bounding boxes as highlighted overlays
+    // [name, score, left%, top%, width%, height%]
+    const regions = [
+      ['Russia', 9.2, 0.53, 0.08, 0.20, 0.22],
+      ['Ukraine', 8.5, 0.537, 0.235, 0.04, 0.04],
+      ['Iran', 8.8, 0.592, 0.29, 0.04, 0.05],
+      ['Israel/Gaza', 8.8, 0.558, 0.307, 0.015, 0.025],
+      ['North Korea', 7.5, 0.795, 0.225, 0.02, 0.03],
+      ['Afghanistan', 8.0, 0.629, 0.268, 0.028, 0.04],
+      ['Syria', 7.0, 0.556, 0.278, 0.018, 0.03],
+      ['Yemen', 7.5, 0.575, 0.35, 0.025, 0.03],
+      ['Somalia', 7.5, 0.574, 0.408, 0.02, 0.04],
+      ['Libya', 6.5, 0.517, 0.31, 0.03, 0.04],
+      ['China', 5.8, 0.72, 0.22, 0.10, 0.16],
+      ['India', 5.0, 0.647, 0.32, 0.06, 0.10],
+      ['Pakistan', 5.5, 0.632, 0.292, 0.04, 0.06],
+      ['Sudan', 6.0, 0.545, 0.35, 0.03, 0.05],
+      ['Venezuela', 6.0, 0.295, 0.39, 0.03, 0.04],
+      ['United States', 4.2, 0.10, 0.18, 0.20, 0.20],
+      ['Brazil', 2.0, 0.295, 0.45, 0.12, 0.18],
+      ['Australia', 2.0, 0.77, 0.55, 0.12, 0.18],
+      ['Germany', 2.0, 0.496, 0.205, 0.02, 0.03],
+      ['UK', 2.0, 0.47, 0.19, 0.015, 0.03],
+      ['France', 2.0, 0.476, 0.215, 0.02, 0.04],
+      ['Turkey', 5.0, 0.555, 0.255, 0.04, 0.04],
+      ['Kazakhstan', 4.5, 0.63, 0.20, 0.07, 0.08],
+      ['Nigeria', 5.5, 0.487, 0.40, 0.03, 0.05],
+      ['DR Congo', 6.5, 0.535, 0.435, 0.04, 0.07],
+      ['Myanmar', 7.0, 0.72, 0.34, 0.025, 0.04],
+    ];
+
+    return regions.map((r) {
+      final name = r[0] as String;
+      final score = (r[1] as double);
+      final color = _getRiskColor(score);
+      final isHovered = widget.hoveredRegion == name;
+      
+      return Positioned(
+        left: (r[2] as double) * w,
+        top: (r[3] as double) * h,
+        width: (r[4] as double) * w,
+        height: (r[5] as double) * h,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (event) {
+            final localX = (r[2] as double) * w + (r[4] as double) * w + 8;
+            final localY = (r[3] as double) * h - 30;
+            widget.onHover(name, score.round(), Offset(localX, localY));
+          },
+          onExit: (_) => widget.onHoverExit(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color: color.withOpacity(isHovered ? 0.15 : (score >= 7 ? 0.08 : 0.04)),
+              border: Border.all(
+                color: isHovered ? gold.withOpacity(0.5) : color.withOpacity(0.08),
+                width: isHovered ? 1.0 : 0.5,
               ),
             ),
-            const SizedBox(height: 16),
-            // Subtitle
-            SizedBox(
-              width: 300,
-              child: Text(
-                'Start trading to see your Behavioral Fitness Score. Minimum 1 trade required.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: themeTextDim(context).withOpacity(0.5),
-                  fontSize: 13,
-                  height: 1.6,
-                  letterSpacing: 0.5,
+          ),
+        ),
+      );
+    }).toList();
+  }
+}
+
+/// Radar grid painter
+class _RadarGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF1A2030)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
+
+    // Horizontal lines
+    for (int i = 1; i < 6; i++) {
+      final y = size.height * i / 6;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+    // Vertical lines
+    for (int i = 1; i < 10; i++) {
+      final x = size.width * i / 10;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Gold ellipse border painter
+class _EllipseGoldBorderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFFF5A623).withOpacity(0.45)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+    
+    // Inset to align perfectly with the map image's built-in ellipse
+    final rect = Rect.fromLTWH(
+      size.width * 0.043,
+      size.height * 0.088,
+      size.width * 0.914,
+      size.height * 0.824,
+    );
+    canvas.drawOval(rect, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _CsvChartPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = gold.withOpacity(0.6)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final path = Path()
+      ..moveTo(0, size.height * 0.8)
+      ..quadraticBezierTo(size.width * 0.25, size.height * 0.7, size.width * 0.4, size.height * 0.45)
+      ..quadraticBezierTo(size.width * 0.6, size.height * 0.5, size.width * 0.75, size.height * 0.25)
+      ..lineTo(size.width, size.height * 0.15);
+
+    canvas.drawPath(path, paint);
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [gold.withOpacity(0.12), Colors.transparent],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final fillPath = Path.from(path)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawPath(fillPath, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _IntelligenceDirectoryModal extends StatefulWidget {
+  final String currentModule;
+  final ValueChanged<String> onSelect;
+
+  const _IntelligenceDirectoryModal({
+    required this.currentModule,
+    required this.onSelect,
+  });
+
+  @override
+  State<_IntelligenceDirectoryModal> createState() => _IntelligenceDirectoryModalState();
+}
+
+class _IntelligenceDirectoryModalState extends State<_IntelligenceDirectoryModal> {
+  late String _activeTempModule;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTempModule = widget.currentModule;
+  }
+
+  String _mapUiToCodeName(String uiName) {
+    switch (uiName) {
+      case 'GEOINTEL': return 'GEOINTEL';
+      case 'PATTERN': return 'PATTERN INSIGHTS';
+      case 'GENOME': return 'TRADER GENOME';
+      case 'COGNITIVE': return 'COGNITIVE FITNESS';
+      case 'AI HUB': return 'AI HUB';
+      case 'CSV INTEL': return 'CSV ANALYSES';
+      default: return uiName;
+    }
+  }
+
+  String _mapCodeToUiName(String codeName) {
+    switch (codeName) {
+      case 'GEOINTEL': return 'GEOINTEL';
+      case 'PATTERN INSIGHTS': return 'PATTERN';
+      case 'TRADER GENOME': return 'GENOME';
+      case 'COGNITIVE FITNESS': return 'COGNITIVE';
+      case 'AI HUB': return 'AI HUB';
+      case 'CSV ANALYSES': return 'CSV INTEL';
+      default: return codeName;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeUiName = _mapCodeToUiName(_activeTempModule);
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Container(
+        height: 245,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: Color(0xFF0A0A0A),
+          border: Border(
+            top: BorderSide(color: Color(0xFF222222), width: 1),
+          ),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(12),
+            topRight: Radius.circular(12),
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: Column(
+            children: [
+              Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFF1E1E1E), width: 1)),
                 ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: gold, width: 1.2),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            'D',
+                            style: monoStyle(fontSize: 9, color: gold, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'INTELLIGENCE DIRECTORY',
+                          style: textStyle(
+                            fontSize: 9,
+                            color: gold,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1A),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF2A2A2A)),
+                        ),
+                        child: const Icon(Icons.close, size: 10, color: Color(0xFF666666)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _buildGridItem('GEOINTEL', Icons.public, 'Risk matrix', true, activeUiName)),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildGridItem('PATTERN', Icons.trending_up, 'Behavior', true, activeUiName)),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildGridItem('GENOME', Icons.fingerprint, 'Identity', false, activeUiName)),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(child: _buildGridItem('COGNITIVE', Icons.psychology_outlined, 'Psychometric', false, activeUiName)),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildGridItem('AI HUB', Icons.smart_toy_outlined, 'Dashboard', true, activeUiName)),
+                          const SizedBox(width: 6),
+                          Expanded(child: _buildGridItem('CSV INTEL', Icons.insert_drive_file_outlined, 'Reports', false, activeUiName)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: Color(0xFF1E1E1E), width: 1)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        style: textStyle(fontSize: 8, color: const Color(0xFF555555), letterSpacing: 0.6),
+                        children: [
+                          const TextSpan(text: 'ACTIVE '),
+                          TextSpan(
+                            text: '3',
+                            style: monoStyle(fontSize: 8, color: gold, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    RichText(
+                      text: TextSpan(
+                        style: textStyle(fontSize: 8, color: const Color(0xFF555555), letterSpacing: 0.6),
+                        children: [
+                          const TextSpan(text: 'GTI '),
+                          TextSpan(
+                            text: '71.4',
+                            style: monoStyle(fontSize: 8, color: gold, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const LiveDot(label: 'LIVE'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridItem(String name, IconData icon, String subtitle, bool isLive, String activeName) {
+    final isSelected = name == activeName;
+
+    return GestureDetector(
+      onTap: () async {
+        HapticFeedback.lightImpact();
+        setState(() {
+          _activeTempModule = _mapUiToCodeName(name);
+        });
+        await Future.delayed(const Duration(milliseconds: 120));
+        if (mounted) {
+          widget.onSelect(_mapUiToCodeName(name));
+          Navigator.pop(context);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: 70,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF141008) : const Color(0xFF111111),
+          border: Border.all(color: isSelected ? gold : const Color(0xFF222222), width: 1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSelected ? gold : const Color(0xFF666666),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              name,
+              style: textStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? gold : const Color(0xFF888888),
+                letterSpacing: 0.5,
               ),
             ),
           ],

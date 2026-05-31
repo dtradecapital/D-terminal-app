@@ -102,12 +102,13 @@ class SupabaseAuthService {
     final user = currentUser;
     if (user == null) return;
 
-    await _supabase.from('trade').insert({
+    await _supabase.from('trades').insert({
       'user_id': user.id,
       'symbol': symbol,
-      'type': type,
-      'amount': amount,
-      'price': price,
+      'trade_type': type,
+      'volume': amount,
+      'entry_price': price,
+      'ticket': 'T-${DateTime.now().millisecondsSinceEpoch}',
     });
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/supabase_auth_service.dart';
-// import 'profile_page.dart';
+import '../widgets/shared.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,10 +18,6 @@ class _LoginPageState extends State<LoginPage> {
   bool isLoading = false;
   bool _isSignUp = false;
 
-  static const Color bg = Color(0xFF070300);
-  static const Color gold = Color(0xFFFFB800);
-  static const Color border = Color(0xFF3A2500);
-
   @override
   void dispose() {
     emailController.dispose();
@@ -35,7 +32,13 @@ class _LoginPageState extends State<LoginPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google sign-in failed: $e')),
+        SnackBar(
+          backgroundColor: sellRed,
+          content: Text(
+            'Google sign-in failed: $e',
+            style: textStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -49,13 +52,18 @@ class _LoginPageState extends State<LoginPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Discord sign-in failed: $e')),
+        SnackBar(
+          backgroundColor: sellRed,
+          content: Text(
+            'Discord sign-in failed: $e',
+            style: textStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
-
 
   Future<void> _signInWithEmail() async {
     final email = emailController.text.trim();
@@ -63,7 +71,13 @@ class _LoginPageState extends State<LoginPage> {
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter email and password')),
+        SnackBar(
+          backgroundColor: warnAmber,
+          content: Text(
+            'Enter email and password',
+            style: textStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
       return;
     }
@@ -81,12 +95,16 @@ class _LoginPageState extends State<LoginPage> {
       if (response.user == null) {
         throw 'Login failed: No user returned';
       }
-
-      // AuthGate stream will handle navigation automatically
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Supabase Login failed: $e')),
+        SnackBar(
+          backgroundColor: sellRed,
+          content: Text(
+            'Login failed: $e',
+            style: textStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -101,7 +119,13 @@ class _LoginPageState extends State<LoginPage> {
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter email and password')),
+        SnackBar(
+          backgroundColor: warnAmber,
+          content: Text(
+            'Enter email and password',
+            style: textStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
       return;
     }
@@ -121,14 +145,24 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Verification email sent! Please check your inbox.')),
+        SnackBar(
+          backgroundColor: buyGreen,
+          content: Text(
+            'Verification email sent! Please check your inbox.',
+            style: textStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
-
-      // AuthGate stream will handle navigation automatically
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Supabase Sign up failed: $e')),
+        SnackBar(
+          backgroundColor: sellRed,
+          content: Text(
+            'Sign up failed: $e',
+            style: textStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -140,7 +174,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: bgDeep,
       body: SafeArea(
         child: Stack(
           children: [
@@ -152,111 +186,119 @@ class _LoginPageState extends State<LoginPage> {
             ),
             Center(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 470),
+                  constraints: const BoxConstraints(maxWidth: 440),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const SizedBox(height: 12),
-                      RichText(
-                        text: const TextSpan(
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 8.0,
+                      // Header logo / title
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'D',
+                            style: monoStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: gold,
+                              letterSpacing: 2.0,
+                            ),
                           ),
-                          children: [
-                            TextSpan(
-                              text: 'D',
-                              style: TextStyle(color: gold),
+                          Text(
+                            ' TERMINAL',
+                            style: monoStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w900,
+                              color: textHigh,
+                              letterSpacing: 2.0,
                             ),
-                            TextSpan(
-                              text: ' TERMINAL',
-                              style: TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 16),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                         decoration: BoxDecoration(
-                          border: Border.all(color: gold),
+                          color: goldSubtle,
+                          border: Border.all(color: borderActive, width: 1),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          'INSTITUTIONAL',
-                          style: TextStyle(
-                            color: gold,
-                            fontSize: 11,
+                        child: Text(
+                          'INSTITUTIONAL GRADE',
+                          style: monoStyle(
+                            color: textGold,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
                             letterSpacing: 1.5,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 44),
+                      const SizedBox(height: 40),
                       RichText(
-                        text: const TextSpan(
-                          style: TextStyle(
-                            fontSize: 30,
+                        textAlign: TextAlign.center,
+                        text: TextSpan(
+                          style: textStyle(
+                            fontSize: 26,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: textHigh,
                           ),
                           children: [
-                            TextSpan(text: 'Terminal '),
+                            const TextSpan(text: 'Terminal '),
                             TextSpan(
                               text: 'Access',
-                              style: TextStyle(
+                              style: textStyle(
                                 color: gold,
                                 fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         _isSignUp ? 'CREATE SECURE ACCOUNT' : 'AUTHENTICATE TO PROCEED',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          letterSpacing: 2.5,
-                          fontSize: 12,
+                        style: monoStyle(
+                          color: textMid,
+                          letterSpacing: 2.0,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: const Text(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
                           "DTrade Capital deploys behavioral AI infrastructure — Trader Genome™, Emotional Volatility Index, Behavioral Shield, and AI Guardian — to detect irrational decisions before they execute. Built for institutional-grade traders who demand edge.",
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
+                          style: textStyle(
+                            color: textMid,
+                            fontSize: 11.5,
                             height: 1.6,
-                            letterSpacing: 1.1,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 36),
+                      const SizedBox(height: 32),
+                      
+                      // Social Sign In
                       Row(
                         children: [
                           Expanded(
-                            child: _socialButton(
+                            child: _SocialLoginButton(
                               label: 'GOOGLE',
                               icon: Icons.g_mobiledata,
-                              borderColor: border,
-                              textColor: Colors.white,
                               onTap: isLoading ? null : _handleGoogleSignIn,
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: _socialButton(
+                            child: _SocialLoginButton(
                               label: 'DISCORD',
                               icon: Icons.discord,
-                              borderColor: border,
-                              textColor: Colors.white,
                               onTap: isLoading ? null : _handleDiscordSignIn,
                             ),
                           ),
@@ -264,55 +306,46 @@ class _LoginPageState extends State<LoginPage> {
                       ),
 
                       const SizedBox(height: 32),
-                      const Row(
+                      Row(
                         children: [
-                          Expanded(child: Divider(color: border)),
+                          const Expanded(child: Divider(color: borderFaint)),
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
                               'OR PROTOCOL AUTH',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                letterSpacing: 2,
-                                fontSize: 11,
+                              style: monoStyle(
+                                color: textLow,
+                                letterSpacing: 1.5,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                          Expanded(child: Divider(color: border)),
+                          const Expanded(child: Divider(color: borderFaint)),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
+                      
+                      // Email Address Input
                       const Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(
-                          'EMAIL ADDRESS',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            letterSpacing: 2,
-                            fontSize: 12,
-                          ),
-                        ),
+                        child: _InputLabel(label: 'EMAIL ADDRESS'),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       _inputBox(
                         controller: emailController,
                         hint: 'you@example.com',
                         icon: Icons.mail_outline,
                         obscure: false,
                       ),
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 20),
+                      
+                      // Password Input
                       const Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(
-                          'PASSWORD',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            letterSpacing: 2,
-                            fontSize: 12,
-                          ),
-                        ),
+                        child: _InputLabel(label: 'PASSWORD'),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       _inputBox(
                         controller: passwordController,
                         hint: '••••••••••',
@@ -328,11 +361,14 @@ class _LoginPageState extends State<LoginPage> {
                             obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: Colors.white70,
+                            color: textMid,
+                            size: 20,
                           ),
                         ),
                       ),
                       const SizedBox(height: 10),
+                      
+                      // Forgot Password Link
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
@@ -340,7 +376,13 @@ class _LoginPageState extends State<LoginPage> {
                             final email = emailController.text.trim();
                             if (email.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please enter your email address')),
+                                SnackBar(
+                                  backgroundColor: warnAmber,
+                                  content: Text(
+                                    'Please enter your email address',
+                                    style: textStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
                               );
                               return;
                             }
@@ -348,127 +390,99 @@ class _LoginPageState extends State<LoginPage> {
                               await SupabaseAuthService.resetPassword(email);
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Verification email sent!')),
+                                  SnackBar(
+                                    backgroundColor: buyGreen,
+                                    content: Text(
+                                      'Verification email sent!',
+                                      style: textStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
                                 );
                               }
                             } catch (e) {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error: $e')),
+                                  SnackBar(
+                                    backgroundColor: sellRed,
+                                    content: Text(
+                                      'Error: $e',
+                                      style: textStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
                                 );
                               }
                             }
                           },
                           style: TextButton.styleFrom(
-                            foregroundColor: gold.withOpacity(0.7),
+                            foregroundColor: gold.withOpacity(0.8),
                             padding: EdgeInsets.zero,
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: const Text(
+                          child: Text(
                             'FORGOT PASSWORD?',
-                            style: TextStyle(
+                            style: monoStyle(
                               fontSize: 10,
-                              letterSpacing: 1.5,
+                              letterSpacing: 1.0,
                               fontWeight: FontWeight.bold,
+                              color: textGold,
                             ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 28),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: gold,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: const RoundedRectangleBorder(),
-                          ),
-                          onPressed: isLoading ? null : (_isSignUp ? _createAccount : _signInWithEmail),
-                          child: Text(
-                            isLoading ? 'PLEASE WAIT...' : (_isSignUp ? 'SIGN UP' : 'LOGIN'),
-                            style: const TextStyle(
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                      
+                      // Submit Button
+                      _SubmitButton(
+                        isLoading: isLoading,
+                        label: _isSignUp ? 'SIGN UP' : 'LOGIN',
+                        onTap: isLoading
+                            ? () {}
+                            : (_isSignUp ? _createAccount : _signInWithEmail),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 18),
+                      
+                      // Toggle Switch
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             _isSignUp ? 'Already have an account? ' : 'No active account? ',
-                            style: const TextStyle(color: Colors.white70),
+                            style: textStyle(color: textMid, fontSize: 13),
                           ),
                           TextButton(
-                            onPressed: isLoading ? null : () {
-                              setState(() {
-                                _isSignUp = !_isSignUp;
-                              });
-                            },
+                            onPressed: isLoading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _isSignUp = !_isSignUp;
+                                    });
+                                  },
                             style: TextButton.styleFrom(
                               foregroundColor: gold,
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: Text(
                               _isSignUp ? 'Login' : 'Sign up',
-                              style: const TextStyle(
+                              style: textStyle(
                                 fontWeight: FontWeight.bold,
+                                color: textGold,
+                                fontSize: 13,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      const Text(
+                      const SizedBox(height: 24),
+                      Text(
                         'Privacy  ·  Terms',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                        style: textStyle(color: textLow, fontSize: 11),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _socialButton({
-    required String label,
-    required IconData icon,
-    required Color borderColor,
-    required Color textColor,
-    VoidCallback? onTap,
-    Color fillColor = const Color(0xFF0C0803),
-  }) {
-    return InkWell(
-      mouseCursor: SystemMouseCursors.click,
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-        decoration: BoxDecoration(
-          color: fillColor,
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: textColor),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: TextStyle(
-                color: textColor,
-                letterSpacing: 2,
-                fontSize: 14,
               ),
             ),
           ],
@@ -489,119 +503,182 @@ class _LoginPageState extends State<LoginPage> {
       obscureText: obscure,
       keyboardType: obscure ? TextInputType.text : TextInputType.emailAddress,
       textInputAction: obscure ? TextInputAction.done : TextInputAction.next,
-      style: const TextStyle(color: Colors.white),
+      style: monoStyle(color: textHigh, fontSize: 13),
+      cursorColor: gold,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24),
-        prefixIcon: Icon(icon, color: Colors.white70),
+        hintStyle: monoStyle(color: textLow, fontSize: 13),
+        prefixIcon: Icon(icon, color: textMid, size: 18),
         suffixIcon: suffix,
         filled: true,
-        fillColor: Colors.black,
-        enabledBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.zero,
-          borderSide: BorderSide(color: border),
+        fillColor: bgCard,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: borderFaint, width: 1),
         ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.zero,
-          borderSide: BorderSide(color: gold),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: borderActive, width: 1.5),
         ),
       ),
     );
   }
 }
 
-class VerticalAccentLine extends StatelessWidget {
-  const VerticalAccentLine({super.key});
+class _InputLabel extends StatelessWidget {
+  final String label;
+  const _InputLabel({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      color: const Color(0xFF3A2500),
+    return Text(
+      label,
+      style: monoStyle(
+        color: textMid,
+        letterSpacing: 1.5,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 }
 
-/*
-class GoogleSignInButtonWidget extends StatefulWidget {
-  const GoogleSignInButtonWidget({super.key});
+class _SocialLoginButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _SocialLoginButton({
+    required this.label,
+    required this.icon,
+    this.onTap,
+  });
 
   @override
-  State<GoogleSignInButtonWidget> createState() => _GoogleSignInButtonWidgetState();
+  State<_SocialLoginButton> createState() => _SocialLoginButtonState();
 }
 
-class _GoogleSignInButtonWidgetState extends State<GoogleSignInButtonWidget> {
-  bool _isLoading = false;
-
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final googleUser = await SupabaseAuthService.googleSignIn.signIn();
-      if (googleUser == null) return;
-
-      final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
-
-      if (idToken == null || accessToken == null) {
-        throw 'Missing Google Auth Tokens';
-      }
-
-      await SupabaseAuthService.signInWithGoogle(idToken, accessToken);
-      
-      if (mounted) {
-        // AuthGate stream will handle navigation automatically
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google sign-in failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
+class _SocialLoginButtonState extends State<_SocialLoginButton> {
+  double _scale = 1.0;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      mouseCursor: SystemMouseCursors.click,
-      onTap: _isLoading ? null : _handleGoogleSignIn,
-      child: Container(
-        width: double.infinity,
-        height: 50,
-        decoration: BoxDecoration(
-          color: const Color(0xFF0C0803),
-          border: Border.all(color: const Color(0xFF3A2500)),
+    final bool isDisabled = widget.onTap == null;
+    return GestureDetector(
+      onTapDown: isDisabled ? null : (_) => setState(() => _scale = 0.98),
+      onTapUp: isDisabled
+          ? null
+          : (_) {
+              setState(() => _scale = 1.0);
+              HapticFeedback.lightImpact();
+              widget.onTap!();
+            },
+      onTapCancel: isDisabled ? null : () => setState(() => _scale = 1.0),
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: bgCard,
+            border: Border.all(color: borderFaint, width: 1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                widget.icon,
+                color: textHigh,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.label,
+                style: textStyle(
+                  color: textHigh,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Center(
-          child: _isLoading
-              ? const CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+      ),
+    );
+  }
+}
+
+class _SubmitButton extends StatefulWidget {
+  final String label;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _SubmitButton({
+    required this.label,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  @override
+  State<_SubmitButton> createState() => _SubmitButtonState();
+}
+
+class _SubmitButtonState extends State<_SubmitButton> {
+  double _scale = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: widget.isLoading ? null : (_) => setState(() => _scale = 0.97),
+      onTapUp: widget.isLoading
+          ? null
+          : (_) {
+              setState(() => _scale = 1.0);
+              HapticFeedback.mediumImpact();
+              widget.onTap();
+            },
+      onTapCancel: widget.isLoading ? null : () => setState(() => _scale = 1.0),
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            color: gold,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: gold.withOpacity(0.15),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              )
+            ],
+          ),
+          alignment: Alignment.center,
+          child: widget.isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                  ),
                 )
-              : const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.g_mobiledata, color: Colors.white),
-                    SizedBox(width: 12),
-                    Text(
-                      'SIGN IN WITH GOOGLE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        letterSpacing: 2,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
+              : Text(
+                  widget.label,
+                  style: textStyle(
+                    fontSize: 14,
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
                 ),
         ),
       ),
     );
   }
 }
-*/

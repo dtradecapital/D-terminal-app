@@ -1,10 +1,6 @@
 # DTrade Terminal 🚀
 
-<<<<<<< HEAD
-![DTrade Logo](assets/images/logo.jpeg
-=======
 ![DTrade Logo](assets/images/logo.jpeg)
->>>>>>> e6eba71 (sec version)
 
 **DTrade** is a professional-grade, high-performance trading terminal built with Flutter. Designed for precision and speed, it offers a sophisticated interface for monitoring markets, analyzing AI-driven signals, and executing trades with a premium "terminal" aesthetic.
 

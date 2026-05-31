@@ -34,7 +34,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         double maxScroll = _tickerController.position.maxScrollExtent;
         double currentScroll = _tickerController.offset;
         
-        // Loop back to start when reaching half (since we duplicate the list)
+        // Loop back to start when reaching end
         if (currentScroll >= maxScroll - 1) {
           _tickerController.jumpTo(0);
         } else {
@@ -59,7 +59,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Column(
           children: [
             _buildTopTicker(),
-            _buildTopNav(),
+            _buildAppHeader(),
             Expanded(
               child: Stack(
                 children: [
@@ -72,7 +72,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                          maxWidth: 900), // Wider for desktop-like feel
+                          maxWidth: 900), // Wider layout limit
                       child: _buildBody(),
                     ),
                   ),
@@ -82,96 +82,153 @@ class _HomePageState extends ConsumerState<HomePage> {
           ],
         ),
       ),
+      bottomNavigationBar: _buildBottomNavBar(),
     );
   }
 
   Widget _buildTopTicker() {
     final marketData = ref.watch(marketServiceProvider);
     
-    final tickerItems = marketData.values.map((data) {
-      return _tickerItem(data.pair, data.price.toStringAsFixed(data.pair.contains('JPY') || data.pair.contains('XAU') ? 2 : 4), 
-          "${data.change > 0 ? '+' : ''}${data.change.toStringAsFixed(2)}%", data.isUp);
+    // Convert current live symbols to ticker widgets
+    final List<Widget> tickerItems = marketData.values.map<Widget>((data) {
+      return TickerPairItem(
+        pair: data.pair,
+        price: data.price,
+        change: data.change,
+        isUp: data.isUp,
+      );
     }).toList();
-
-    // Add some static indices to make it look full
+ 
+    // Add supplemental macro indices
     tickerItems.addAll([
-      _tickerItem('SPX', '5,432.10', '+0.61%', true),
-      _tickerItem('NASDAQ', '19,240.20', '+0.92%', true),
+      const TickerPairItem(pair: 'DXY', price: 104.24, change: 0.12, isUp: true),
+      const TickerPairItem(pair: 'SPX', price: 5432.10, change: 0.61, isUp: true),
+      const TickerPairItem(pair: 'NASDAQ', price: 19240.20, change: 0.92, isUp: true),
     ]);
-
+ 
     return Container(
-      height: 28,
+      height: 22,
       decoration: BoxDecoration(
-        color: themeBg(context),
+        color: const Color(0xFF040404),
         border: Border(bottom: BorderSide(color: themeBorder(context))),
       ),
       alignment: Alignment.centerLeft,
       child: ListView.builder(
         controller: _tickerController,
         scrollDirection: Axis.horizontal,
-        physics: const NeverScrollableScrollPhysics(), // Animation handles scrolling
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        // Duplicate items infinitely or sufficiently large to loop
+        physics: const NeverScrollableScrollPhysics(),
         itemBuilder: (context, index) => tickerItems[index % tickerItems.length],
       ),
     );
   }
 
-  Widget _tickerItem(String pair, String price, String change, bool isUp) {
-    final color = isUp ? const Color(0xFF00FF66) : const Color(0xFFFF0033);
-    return Padding(
-      padding: const EdgeInsets.only(right: 20),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(pair,
-              style: const TextStyle(
-                  color: gold, fontSize: 11, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 6),
-          Text(price,
-              style: TextStyle(color: themeText(context), fontSize: 11)),
-          const SizedBox(width: 6),
-          Text(change,
-              style: TextStyle(
-                  color: color, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
+  Widget _buildAppHeader() {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: const Color(0xFF080808),
+        border: Border(bottom: BorderSide(color: themeBorder(context), width: 1)),
       ),
-    );
-  }
-
-  Widget _buildTopNav() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // App Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Left: D Logo + Title + Pulse Connected Status
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(border: Border.all(color: gold)),
-                    child: const Text('D',
-                        style: TextStyle(
-                            color: gold,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold)),
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: gold.withOpacity(0.1),
+                  border: Border.all(color: gold, width: 1.5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'D',
+                  style: monoStyle(
+                    fontSize: 12,
+                    color: gold,
+                    fontWeight: FontWeight.w900,
                   ),
-                  const SizedBox(width: 8),
-                  const Text('TERMINAL',
-                      style: TextStyle(
-                          color: gold,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'TERMINAL',
+                    style: textStyle(
+                      fontSize: 11,
+                      color: gold,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      _PulseDot(),
+                      const SizedBox(width: 3),
+                      Text(
+                        'CONNECTED',
+                        style: textStyle(
+                          fontSize: 9,
+                          color: buyGreen,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
+            ],
+          ),
+
+          // Center/Right: Mode Toggle + Virtual Balance Chip + Avatar
+          Row(
+            children: [
+              // Virtual Balance Chip
+              Container(
+                height: 26,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF121212),
+                  border: Border.all(color: themeBorder(context)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: const BoxDecoration(
+                        color: gold,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'DEMO: \$100,000.00',
+                      style: monoStyle(
+                        fontSize: 11,
+                        color: gold,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Avatar
               Builder(builder: (ctx) {
                 final sbUser = sb.Supabase.instance.client.auth.currentUser;
-                
                 final name = sbUser?.email ?? 'ME';
                 final initials = name.length >= 2
                     ? name.substring(0, 2).toUpperCase()
@@ -185,42 +242,50 @@ class _HomePageState extends ConsumerState<HomePage> {
                       height: 28,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: gold),
+                        color: const Color(0xFF1A1A1A),
+                        border: Border.all(color: gold, width: 1.5),
                       ),
                       alignment: Alignment.center,
-                      child: Text(initials,
-                          style: const TextStyle(
-                              color: gold,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold)),
+                      child: Text(
+                        initials,
+                        style: monoStyle(
+                          fontSize: 9,
+                          color: gold,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 );
               }),
             ],
           ),
-        ),
-        // Tabs Container
-        Container(
-          height: 36,
-          decoration: BoxDecoration(
-            color: themeSurface(context),
-            border: Border(bottom: BorderSide(color: themeBorder(context))),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _navTab('TRADING', 0),
-              _navTab('INTELLIGENCE', 1),
-              _navTab('ACCOUNT', 2),
-            ],
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _navTab(String label, int index) {
+  Widget _buildBottomNavBar() {
+    return Container(
+      height: 46,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0C0C0C),
+        border: Border(top: BorderSide(color: themeBorder(context), width: 1)),
+      ),
+      child: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _bottomNavItem('TRADING', Icons.analytics_outlined, 0),
+            _bottomNavItem('INTELLIGENCE', Icons.radar_outlined, 1),
+            _bottomNavItem('ACCOUNT', Icons.account_circle_outlined, 2),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomNavItem(String label, IconData icon, int index) {
     final isSelected = _currentIndex == index;
     return Expanded(
       child: MouseRegion(
@@ -229,20 +294,34 @@ class _HomePageState extends ConsumerState<HomePage> {
           onTap: () => setState(() => _currentIndex = index),
           behavior: HitTestBehavior.opaque,
           child: Container(
-            alignment: Alignment.center,
             decoration: BoxDecoration(
-                border: Border(
-                    bottom: BorderSide(
-                        color: isSelected ? gold : Colors.transparent,
-                        width: 2))),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? gold : themeTextDim(context),
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                letterSpacing: 0.8,
+              border: Border(
+                top: BorderSide(
+                  color: isSelected ? gold : Colors.transparent,
+                  width: 1.5,
+                ),
               ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? gold : const Color(0xFF444444),
+                  size: 19,
+                ),
+                if (isSelected) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    label,
+                    style: textStyle(
+                      fontSize: 8,
+                      color: gold,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
@@ -263,3 +342,169 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 }
+
+class TickerPairItem extends StatefulWidget {
+  final String pair;
+  final double price;
+  final double change;
+  final bool isUp;
+
+  const TickerPairItem({
+    super.key,
+    required this.pair,
+    required this.price,
+    required this.change,
+    required this.isUp,
+  });
+
+  @override
+  State<TickerPairItem> createState() => _TickerPairItemState();
+}
+
+class _TickerPairItemState extends State<TickerPairItem> with SingleTickerProviderStateMixin {
+  late AnimationController _flashController;
+  late Color _flashColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _flashColor = Colors.transparent;
+    _flashController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+  }
+
+  @override
+  void didUpdateWidget(TickerPairItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.price != oldWidget.price) {
+      // Trigger a green/red flash animation based on the price trend
+      setState(() {
+        _flashColor = widget.price > oldWidget.price
+            ? buyGreen.withOpacity(0.25)
+            : sellRed.withOpacity(0.25);
+      });
+      _flashController.forward(from: 0.0).then((_) {
+        if (mounted) {
+          setState(() {
+            _flashColor = Colors.transparent;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _flashController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = widget.isUp ? buyGreen : sellRed;
+    final priceStr = widget.price.toStringAsFixed(
+      widget.pair.contains('JPY') || widget.pair.contains('XAU') ? 2 : 4
+    );
+    final changeStr = "${widget.change > 0 ? '+' : ''}${widget.change.toStringAsFixed(2)}%";
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      color: _flashColor,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      alignment: Alignment.center,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.pair,
+            style: monoStyle(
+              fontSize: 9,
+              color: gold,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            priceStr,
+            style: monoStyle(
+              fontSize: 9,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 3),
+          Text(
+            changeStr,
+            style: monoStyle(
+              fontSize: 8,
+              color: textColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '·',
+            style: monoStyle(
+              fontSize: 9,
+              color: textLow,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulseDot extends StatefulWidget {
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: buyGreen.withOpacity(_animation.value),
+            boxShadow: [
+              BoxShadow(
+                color: buyGreen.withOpacity(0.6 * (1.0 - _animation.value)),
+                blurRadius: 4,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+
