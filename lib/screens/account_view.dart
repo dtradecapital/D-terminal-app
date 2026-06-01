@@ -2884,6 +2884,55 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
       ),
     );
   }
+
+  void _confirmSignOut(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0A0A0A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFF2A2A2A)),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.logout, color: Color(0xFFFF1744), size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'SIGN OUT',
+              style: monoStyle(color: const Color(0xFFFF1744), fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to end your terminal session?\n\nYou will need to sign in again to access your account.',
+          style: textStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: TextButton.styleFrom(foregroundColor: Colors.white54),
+            child: Text(
+              'CANCEL',
+              style: monoStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await SupabaseAuthService.signOut();
+            },
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF1744)),
+            child: Text(
+              'SIGN OUT',
+              style: monoStyle(color: const Color(0xFFFF1744), fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TerminalNavigationDrawer extends StatelessWidget {
