@@ -2031,7 +2031,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
     
     return Center(
       child: Container(
-        maxWidth: 600,
+        constraints: const BoxConstraints(maxWidth: 600),
         margin: const EdgeInsets.symmetric(vertical: 24),
         decoration: BoxDecoration(
           color: const Color(0xFF0D0A07),
