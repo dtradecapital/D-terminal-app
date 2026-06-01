@@ -28,7 +28,19 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _handleGoogleSignIn() async {
     setState(() => isLoading = true);
     try {
-      await SupabaseAuthService.signInWithGoogle();
+      final launched = await SupabaseAuthService.signInWithGoogle();
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: warnAmber,
+            content: Text(
+              'Could not open Google sign-in. Please try again.',
+              style: textStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
+      // Auth state change is handled by AuthGate's StreamBuilder automatically
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -304,7 +316,6 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 32),
                       Row(
                         children: [

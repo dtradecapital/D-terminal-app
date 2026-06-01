@@ -266,21 +266,21 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildBottomNavBar() {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
-      height: 46,
+      height: 50 + bottomPadding,
       decoration: BoxDecoration(
         color: const Color(0xFF0C0C0C),
         border: Border(top: BorderSide(color: themeBorder(context), width: 1)),
       ),
-      child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _bottomNavItem('TRADING', Icons.analytics_outlined, 0),
-            _bottomNavItem('INTELLIGENCE', Icons.radar_outlined, 1),
-            _bottomNavItem('ACCOUNT', Icons.account_circle_outlined, 2),
-          ],
-        ),
+      padding: EdgeInsets.only(bottom: bottomPadding),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _bottomNavItem('TRADING', Icons.analytics_outlined, 0),
+          _bottomNavItem('INTELLIGENCE', Icons.radar_outlined, 1),
+          _bottomNavItem('ACCOUNT', Icons.account_circle_outlined, 2),
+        ],
       ),
     );
   }

@@ -875,7 +875,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
           const SizedBox(height: 12),
           Row(
             children: [
-              _dangerButton('Logout', () async => await SupabaseAuthService.signOut(), isTransparent: true),
+              _dangerButton('Logout', () => _confirmSignOut(context), isTransparent: true),
               const SizedBox(width: 10),
               _dangerButton('Cancel Subscription', () {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -886,18 +886,48 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
               _dangerButton('Delete Account', () {
                 showDialog(
                   context: context,
-                  builder: (context) => AlertDialog(
-                    backgroundColor: bgDeep,
-                    title: Text('Delete Account', style: monoStyle(color: criticalRed)),
-                    content: Text('Are you sure you want to permanently delete your account?', style: textStyle(color: Colors.white70)),
+                  barrierDismissible: false,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF0A0A0A),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: criticalRed.withOpacity(0.4)),
+                    ),
+                    title: Row(
+                      children: [
+                        const Icon(Icons.delete_forever, color: Color(0xFFFF1744), size: 18),
+                        const SizedBox(width: 8),
+                        Text('DELETE ACCOUNT', style: monoStyle(color: criticalRed, fontSize: 12, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'This action is permanent and cannot be undone.',
+                          style: textStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '• All your trades and history will be deleted\n• Your subscription will be cancelled\n• You will lose access immediately',
+                          style: textStyle(color: Colors.white60, fontSize: 11, height: 1.6),
+                        ),
+                      ],
+                    ),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: Text('CANCEL', style: monoStyle(color: Colors.white))),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: TextButton.styleFrom(foregroundColor: Colors.white54),
+                        child: Text('CANCEL', style: monoStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
                       TextButton(
                         onPressed: () async {
-                          Navigator.pop(context);
+                          Navigator.pop(ctx);
                           await SupabaseAuthService.signOut();
                         },
-                        child: Text('DELETE', style: monoStyle(color: criticalRed)),
+                        style: TextButton.styleFrom(foregroundColor: criticalRed),
+                        child: Text('DELETE PERMANENTLY', style: monoStyle(color: criticalRed, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -1041,9 +1071,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
 
   Widget _sidebarLogoutItem() {
     return InkWell(
-      onTap: () async {
-        await SupabaseAuthService.signOut();
-      },
+      onTap: () => _confirmSignOut(context),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
@@ -1105,7 +1133,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
             child: IconButton(
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.logout, color: sellRed, size: 14),
-              onPressed: () async => await SupabaseAuthService.signOut(),
+              onPressed: () => _confirmSignOut(context),
             ),
           ),
           const SizedBox(width: 10),
@@ -3212,34 +3240,42 @@ class _TerminalNavigationDrawer extends StatelessWidget {
   void _confirmSignOut(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF0A0A0A),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Color(0xFF222222)),
+          side: const BorderSide(color: Color(0xFF2A2A2A)),
         ),
-        title: Text(
-          'SIGN OUT',
-          style: monoStyle(color: const Color(0xFFFF1744), fontSize: 13, fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            const Icon(Icons.logout, color: Color(0xFFFF1744), size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'SIGN OUT',
+              style: monoStyle(color: const Color(0xFFFF1744), fontSize: 13, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
         content: Text(
-          'Are you sure you want to end your terminal session?',
-          style: textStyle(color: Colors.white70, fontSize: 11),
+          'Are you sure you want to end your terminal session?\n\nYou will need to sign in again to access your account.',
+          style: textStyle(color: Colors.white70, fontSize: 12, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
+            style: TextButton.styleFrom(foregroundColor: Colors.white54),
             child: Text(
               'CANCEL',
-              style: monoStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              style: monoStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
             ),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              Navigator.pop(context);
               await SupabaseAuthService.signOut();
             },
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF1744)),
             child: Text(
               'SIGN OUT',
               style: monoStyle(color: const Color(0xFFFF1744), fontSize: 10, fontWeight: FontWeight.bold),

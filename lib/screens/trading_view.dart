@@ -1505,41 +1505,52 @@ class _TradingViewState extends ConsumerState<TradingView> {
                 _selectedSymbol,
                 style: textStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-              Text(
-                'O: ${open.toStringAsFixed(digits)}  H: ${high.toStringAsFixed(digits)}  L: ${low.toStringAsFixed(digits)}  C: ${close.toStringAsFixed(digits)}',
-                style: monoStyle(fontSize: 9, color: textMid),
+              const SizedBox(width: 8),
+              Flexible(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Text(
+                    'O: ${open.toStringAsFixed(digits)}  H: ${high.toStringAsFixed(digits)}  L: ${low.toStringAsFixed(digits)}  C: ${close.toStringAsFixed(digits)}',
+                    style: monoStyle(fontSize: 9, color: textMid),
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 6),
           const Divider(color: borderFaint, height: 1),
           const SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  _chartTab('1m', true),
-                  _chartTab('5m', false),
-                  _chartTab('15m', false),
-                  _chartTab('1H', false),
-                  _chartTab('4H', false),
-                  _chartTab('1D', false),
-                ],
-              ),
-              Row(
-                children: [
-                  Text('SPREAD —', style: monoStyle(color: textLow, fontSize: 9)),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.circle, color: buyGreen, size: 6),
-                  const SizedBox(width: 4),
-                  Text(
-                    'LIVE',
-                    style: monoStyle(color: buyGreen, fontSize: 9, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                Row(
+                  children: [
+                    _chartTab('1m', true),
+                    _chartTab('5m', false),
+                    _chartTab('15m', false),
+                    _chartTab('1H', false),
+                    _chartTab('4H', false),
+                    _chartTab('1D', false),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                Row(
+                  children: [
+                    Text('SPREAD —', style: monoStyle(color: textLow, fontSize: 9)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.circle, color: buyGreen, size: 6),
+                    const SizedBox(width: 4),
+                    Text(
+                      'LIVE',
+                      style: monoStyle(color: buyGreen, fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 6),
           Container(
@@ -1552,28 +1563,32 @@ class _TradingViewState extends ConsumerState<TradingView> {
           // Chart Bottom Tabs (Positions lists)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    _bottomTab('OPEN', 0, badge: _openPositions.length.toString()),
-                    const SizedBox(width: 12),
-                    _bottomTab('HISTORY', 1),
-                    const SizedBox(width: 12),
-                    _bottomTab('PENDING', 2),
-                  ],
-                ),
-                Row(
-                  children: [
-                    FilterTab(label: 'ALL', active: true, onTap: () {}),
-                    const SizedBox(width: 4),
-                    FilterTab(label: 'BUY', active: false, onTap: () {}),
-                    const SizedBox(width: 4),
-                    FilterTab(label: 'SELL', active: false, onTap: () {}),
-                  ],
-                ),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  Row(
+                    children: [
+                      _bottomTab('OPEN', 0, badge: _openPositions.length.toString()),
+                      const SizedBox(width: 12),
+                      _bottomTab('HISTORY', 1),
+                      const SizedBox(width: 12),
+                      _bottomTab('PENDING', 2),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  Row(
+                    children: [
+                      FilterTab(label: 'ALL', active: true, onTap: () {}),
+                      const SizedBox(width: 4),
+                      FilterTab(label: 'BUY', active: false, onTap: () {}),
+                      const SizedBox(width: 4),
+                      FilterTab(label: 'SELL', active: false, onTap: () {}),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           _buildPositionsList(),
