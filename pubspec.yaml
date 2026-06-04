@@ -36,7 +36,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/logo.jpeg
-    - assets/images/world_map.png
+    - assets/images/
     - assets/world-map.svg
     - assets/env

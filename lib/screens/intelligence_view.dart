@@ -1492,10 +1492,39 @@ class _IntelligenceViewState extends ConsumerState<IntelligenceView> with Single
     ref.invalidate(signalsProvider);
     ref.invalidate(correlationMatrixProvider);
     ref.invalidate(situationalReportProvider);
+    ref.invalidate(gdeltStreamProvider);
     
     await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) {
       setState(() => _isRefreshing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          backgroundColor: const Color(0xFF0E0E0E),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+            side: const BorderSide(color: gold, width: 0.5),
+          ),
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.check_circle_outline, color: gold, size: 14),
+              const SizedBox(width: 10),
+              Text(
+                'DATA REFRESHED',
+                style: monoStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '· ALL FEEDS UPDATED',
+                style: monoStyle(fontSize: 9, color: Colors.white38),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -2092,7 +2121,10 @@ class _GeoIntelMapWidgetState extends State<_GeoIntelMapWidget> with TickerProvi
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
-        final h = (w * 0.42).clamp(200.0, 300.0);
+        final bool isMobile = w < 700;
+        final h = isMobile
+            ? (w * 0.60).clamp(220.0, 400.0)
+            : (w * 0.42).clamp(200.0, 340.0);
 
         // Merge GDELT hotspots if live
         final List<Map<String, dynamic>> hotspots = List.from(_hotspots);

@@ -191,40 +191,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           // Center/Right: Mode Toggle + Virtual Balance Chip + Avatar
           Row(
             children: [
-              // Virtual Balance Chip
-              Container(
-                height: 26,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF121212),
-                  border: Border.all(color: themeBorder(context)),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: const BoxDecoration(
-                        color: gold,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'DEMO: \$100,000.00',
-                      style: monoStyle(
-                        fontSize: 11,
-                        color: gold,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
 
               // Avatar
               Builder(builder: (ctx) {

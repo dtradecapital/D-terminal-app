@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import '../services/billing_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/support_service.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AccountView extends ConsumerStatefulWidget {
   const AccountView({super.key});
@@ -33,7 +34,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
   // Controllers
   late TextEditingController _nameCtrl;
   late TextEditingController _emailCtrl;
-  final _phoneCtrl = TextEditingController(text: '+91 98765 43210');
+  final _phoneCtrl = TextEditingController();
   
   // Security controllers
   final _currentPasswordCtrl = TextEditingController();
@@ -54,6 +55,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
   bool _isSidebarOpen = false;
   String _communityTab = 'Announcements';
   String _selectedPlan = 'Free';
+  String _billingPeriod = '12months'; // 'monthly', '6months', '12months'
   Uint8List? _selectedImageBytes;
   String? _selectedImageName;
   bool _isUploading = false;
@@ -1722,41 +1724,84 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
             const SizedBox(height: 28),
             
             _buildSectionTitleHeader(title: 'SELECT ACCESS LEVEL', subtitle: 'Choose the plan that suits your trading scale'),
-            const SizedBox(height: 16),
-            
-            // Plan Shortcut Buttons
-            Row(
-              children: [
-                _buildPlanShortcutBtn('ZERO', _freeCardKey),
-                const SizedBox(width: 10),
-                _buildPlanShortcutBtn('CORE', _coreCardKey),
-                const SizedBox(width: 10),
-                _buildPlanShortcutBtn('GUARDIAN', _guardianCardKey),
-              ],
-            ),
             const SizedBox(height: 20),
-            
-            // Cards Layout
+
+            // ── Billing Period Tabs ─────────────────────────────────
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111111),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: borderFaint),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildPeriodTab('monthly', 'MONTHLY', null),
+                    const SizedBox(width: 4),
+                    _buildPeriodTab('6months', '6 MONTHS', '2 FREE 🔥'),
+                    const SizedBox(width: 4),
+                    _buildPeriodTab('12months', '12 MONTHS', '4 FREE 🔥'),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Promo Banner ────────────────────────────────────────
+            if (_billingPeriod != 'monthly')
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: buyGreen.withOpacity(0.12),
+                    border: Border.all(color: buyGreen.withOpacity(0.4)),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _billingPeriod == '6months'
+                        ? '🎁  2 MONTHS FREE — PAY FOR 4, GET 6!'
+                        : '🎁  4 MONTHS FREE — PAY FOR 8, GET 12!',
+                    style: monoStyle(fontSize: 10, color: buyGreen, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 20),
+
+            // ── Plan Cards ─────────────────────────────────────────
             isWide
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: _buildSinglePlanCard('Free')),
+                      Expanded(child: _buildSinglePlanCard('Free', sub.planName)),
                       const SizedBox(width: 16),
-                      Expanded(child: _buildSinglePlanCard('Core')),
+                      Expanded(child: _buildSinglePlanCard('Core', sub.planName)),
                       const SizedBox(width: 16),
-                      Expanded(child: _buildSinglePlanCard('Guardian')),
+                      Expanded(child: _buildSinglePlanCard('Guardian', sub.planName)),
                     ],
                   )
                 : Column(
                     children: [
-                      _buildSinglePlanCard('Free'),
+                      _buildSinglePlanCard('Free', sub.planName),
                       const SizedBox(height: 16),
-                      _buildSinglePlanCard('Core'),
+                      _buildSinglePlanCard('Core', sub.planName),
                       const SizedBox(height: 16),
-                      _buildSinglePlanCard('Guardian'),
+                      _buildSinglePlanCard('Guardian', sub.planName),
                     ],
                   ),
+            const SizedBox(height: 24),
+
+            // ── Footer ─────────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('SECURE PAYMENTS VIA STRIPE & PAYPAL',
+                    style: monoStyle(fontSize: 8, color: textLow)),
+                Text('CANCEL ANYTIME · 24H VERIFICATION',
+                    style: monoStyle(fontSize: 8, color: textLow)),
+              ],
+            ),
           ],
         );
       },
@@ -1765,32 +1810,97 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
     );
   }
 
-  Widget _buildSinglePlanCard(String planType) {
+  Widget _buildPeriodTab(String period, String label, String? badge) {
+    final isActive = _billingPeriod == period;
+    return GestureDetector(
+      onTap: () { HapticFeedback.lightImpact(); setState(() => _billingPeriod = period); },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? gold : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: monoStyle(fontSize: 10, color: isActive ? Colors.black : textMid, fontWeight: FontWeight.bold)),
+            if (badge != null) ...[
+              const SizedBox(height: 2),
+              Text(badge, style: monoStyle(fontSize: 8, color: isActive ? Colors.black87 : buyGreen, fontWeight: FontWeight.bold)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSinglePlanCard(String planType, String currentPlanName) {
     final title = planType == 'Free' ? 'ZERO' : (planType == 'Core' ? 'CORE' : 'GUARDIAN');
-    final subtitle = planType == 'Free' 
+    final subtitle = planType == 'Free'
         ? 'Get started with AI-powered insights. Perfect for: Curious traders who want to test the platform.'
-        : (planType == 'Core' 
-            ? 'AI-powered self-awareness for your trading. Perfect for: Growing traders looking to audit their habits.' 
-            : 'Real-time AI protection for your capital. Perfect for: Scale traders who need strict risk controls.');
-    final price = planType == 'Free' ? 'Free' : (planType == 'Core' ? '\$9 / mo' : '\$29 / mo');
-    final billingDesc = planType == 'Free' ? 'Lifetime access' : (planType == 'Core' ? 'Billed \$108 annually' : 'Billed \$348 annually');
-    final saveBadge = planType == 'Free' ? null : (planType == 'Core' ? 'SAVE 60% OFF' : 'SAVE 66% OFF');
-    final features = planType == 'Free' 
+        : (planType == 'Core'
+            ? 'AI-powered self-awareness for your trading.'
+            : 'Real-time AI protection for your capital.');
+
+    // Dynamic pricing based on billing period
+    String price;
+    String billingDesc;
+    String? saveBadge;
+    String? freeMonthsBadge;
+    String rawPrice;
+    String priceLabel;
+
+    if (planType == 'Free') {
+      price = 'Free'; billingDesc = 'Lifetime access';
+      saveBadge = null; freeMonthsBadge = null;
+      rawPrice = '0'; priceLabel = '';
+    } else if (planType == 'Core') {
+      if (_billingPeriod == 'monthly') {
+        price = '\$19'; billingDesc = 'BILLED \$19 MONTHLY';
+        saveBadge = null; freeMonthsBadge = null;
+        rawPrice = '19'; priceLabel = '/mo';
+      } else if (_billingPeriod == '6months') {
+        price = '\$13'; billingDesc = 'BILLED \$78 EVERY 6 MONTHS';
+        saveBadge = 'SAVE 32% OFF'; freeMonthsBadge = '🎁  2 MONTHS FREE - SAVE \$38';
+        rawPrice = '78'; priceLabel = '/mo';
+      } else {
+        price = '\$13'; billingDesc = 'BILLED \$152 ANNUALLY';
+        saveBadge = 'SAVE 32% OFF'; freeMonthsBadge = '🎁  4 MONTHS FREE - SAVE \$76';
+        rawPrice = '152'; priceLabel = '/mo';
+      }
+    } else {
+      if (_billingPeriod == 'monthly') {
+        price = '\$49'; billingDesc = 'BILLED \$49 MONTHLY';
+        saveBadge = null; freeMonthsBadge = null;
+        rawPrice = '49'; priceLabel = '/mo';
+      } else if (_billingPeriod == '6months') {
+        price = '\$33'; billingDesc = 'BILLED \$198 EVERY 6 MONTHS';
+        saveBadge = 'SAVE 33% OFF'; freeMonthsBadge = '🎁  3 MONTHS FREE - SAVE \$99';
+        rawPrice = '198'; priceLabel = '/mo';
+      } else {
+        price = '\$33'; billingDesc = 'BILLED \$396 ANNUALLY';
+        saveBadge = 'SAVE 33% OFF'; freeMonthsBadge = '🎁  4 MONTHS FREE - SAVE \$196';
+        rawPrice = '396'; priceLabel = '/mo';
+      }
+    }
+
+    final features = planType == 'Free'
         ? [
             '3 AI-powered signals per week',
             'Community access (Telegram/Discord)',
             'Basic market analysis (weekly recap)',
             'Trading psychology mini-course (5 lessons)',
-            'Risk calculator tool'
+            'Risk calculator tool',
           ]
-        : (planType == 'Core' 
+        : (planType == 'Core'
             ? [
                 'Trader Genome™ — Full Profile unlocked',
-                'Weekly behavioral report (risk trends, discipline)',
+                'Weekly behavioral report (pattern breakdown, risk trends, discipline score)',
                 'EVI history & session tracking',
-                'Emotional patterns (revenge loops, FOMO, size drift)',
+                'Emotional pattern detection (revenge loops, FOMO cycles, size drift)',
                 'Behavioral Fitness Score — weekly progress',
-                'Email support'
+                'Email support',
               ]
             : [
                 'Everything in Core',
@@ -1802,197 +1912,237 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
                 'Loss streak auto-shutdown',
                 'Full AI Guardian — Behavioral Shield active',
                 'Performance analytics dashboard',
-                'Priority support (12hr response)'
+                'Priority support (12hr response)',
+                '🏆 Premium Signals — Exclusive high-conviction trade alerts',
               ]);
 
-    final isSelected = _selectedPlan == planType;
+    final isGuardian = planType == 'Guardian';
     final cardKey = planType == 'Free' ? _freeCardKey : (planType == 'Core' ? _coreCardKey : _guardianCardKey);
 
-    return Container(
-      key: cardKey,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: themeSection(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isSelected ? gold : border,
-          width: isSelected ? 1.5 : 1,
-        ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: gold.withOpacity(0.05),
-                  blurRadius: 10,
-                  spreadRadius: 2,
-                )
-              ]
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(
-                planType == 'Free' 
-                    ? Icons.shield_outlined 
-                    : (planType == 'Core' ? Icons.flash_on : Icons.workspace_premium),
-                color: planType == 'Free' ? Colors.white60 : gold,
-                size: 20,
-              ),
-              if (saveBadge != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: buyGreen.withOpacity(0.12),
-                    border: Border.all(color: buyGreen, width: 0.5),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    saveBadge,
-                    style: monoStyle(fontSize: 8, color: buyGreen, fontWeight: FontWeight.bold),
-                  ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // MOST POPULAR badge above Guardian
+        if (isGuardian)
+          Positioned(
+            top: -14,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: gold,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: monoStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: textStyle(fontSize: 10, color: themeTextDim(context)),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                price,
-                style: monoStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(width: 4),
-              if (planType != 'Free')
-                Text(
-                  '/ MONTH',
-                  style: monoStyle(fontSize: 8, color: themeTextDim(context)),
-                ),
-            ],
-          ),
-          Text(
-            billingDesc,
-            style: monoStyle(fontSize: 9, color: themeTextDim(context)),
-          ),
-          if (planType == 'Guardian') ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: gold.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'MOST POPULAR',
-                style: monoStyle(fontSize: 7, color: gold, fontWeight: FontWeight.bold),
+                child: Text('MOST POPULAR',
+                    style: monoStyle(fontSize: 8, color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ),
-          ],
-          const Divider(color: border, height: 24),
-          ...features.map(
-            (f) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+
+        Container(
+          key: cardKey,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isGuardian ? const Color(0xFF0D1117) : themeSection(context),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isGuardian ? gold : borderFaint,
+              width: isGuardian ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isGuardian) const SizedBox(height: 8),
+
+              // Top row: icon + save badge
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.check, color: gold, size: 12),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      f,
-                      style: textStyle(fontSize: 9.5, color: Colors.white70),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: planType == 'Free'
+                          ? const Color(0xFF1A1A2E)
+                          : (isGuardian ? const Color(0xFF1A1400) : const Color(0xFF0A1A1A)),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: planType == 'Free'
+                            ? Colors.white24
+                            : (isGuardian ? gold.withOpacity(0.5) : buyGreen.withOpacity(0.3)),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      planType == 'Free'
+                          ? Icons.shield_outlined
+                          : (planType == 'Core' ? Icons.flash_on : Icons.workspace_premium),
+                      color: planType == 'Free' ? Colors.white60 : gold,
+                      size: 22,
                     ),
                   ),
+                  if (saveBadge != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: buyGreen.withOpacity(0.15),
+                        border: Border.all(color: buyGreen, width: 0.5),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(saveBadge,
+                          style: monoStyle(fontSize: 8, color: buyGreen, fontWeight: FontWeight.bold)),
+                    ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  _selectedPlan = planType;
-                });
-                if (planType != 'Free') {
-                  _showPaymentFlow(title, planType == 'Core' ? '\$9/mo' : '\$29/mo', planType == 'Core' ? '108' : '348');
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('You are already on the ZERO (Free) Plan.')),
+              const SizedBox(height: 12),
+
+              // Title
+              Text(title,
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  )),
+              const SizedBox(height: 4),
+              Text(subtitle, style: textStyle(fontSize: 10, color: textMid)),
+              const SizedBox(height: 16),
+
+              // Price
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(price,
+                      style: GoogleFonts.inter(
+                          fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+                  if (priceLabel.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Text(priceLabel, style: monoStyle(fontSize: 9, color: textMid)),
+                  ],
+                ],
+              ),
+              Text(billingDesc, style: monoStyle(fontSize: 8, color: textMid)),
+              if (freeMonthsBadge != null) ...[
+                const SizedBox(height: 6),
+                Text(freeMonthsBadge,
+                    style: monoStyle(fontSize: 8, color: const Color(0xFFFF6B35), fontWeight: FontWeight.bold)),
+              ],
+
+              const Divider(color: borderFaint, height: 24),
+
+              // Features
+              ...features.map((f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 9),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: f.startsWith('🏆') ? gold : buyGreen, size: 13),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(f, style: textStyle(fontSize: 10, color: Colors.white70)),
+                        ),
+                      ],
+                    ),
+                  )),
+
+              // PREMIUM SIGNALS callout (Guardian only)
+              if (isGuardian) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: gold.withOpacity(0.08),
+                    border: Border.all(color: gold.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.workspace_premium, color: gold, size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('PREMIUM SIGNALS',
+                                style: monoStyle(fontSize: 9, color: gold, fontWeight: FontWeight.bold)),
+                            Text('Exclusive high-conviction trade alerts',
+                                style: textStyle(fontSize: 9, color: textMid)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
+
+              // SELECT / CURRENT PLAN button
+              Builder(builder: (_) {
+                // Normalise: ZERO == Free, CORE == Core, GUARDIAN == Guardian
+                final normalised = currentPlanName.toUpperCase();
+                final isCurrent = normalised == title; // title is already uppercase
+                if (isCurrent) {
+                  return SizedBox(
+                    width: double.infinity,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      decoration: BoxDecoration(
+                        color: buyGreen.withOpacity(0.08),
+                        border: Border.all(color: buyGreen.withOpacity(0.4)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.check_circle, color: buyGreen, size: 13),
+                          const SizedBox(width: 6),
+                          Text('CURRENT PLAN',
+                              style: monoStyle(fontSize: 10, color: buyGreen, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
                   );
                 }
-              },
-              style: TextButton.styleFrom(
-                backgroundColor: gold,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              child: Text(
-                'SELECT $title',
-                style: monoStyle(
-                  fontSize: 10,
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlanShortcutBtn(String label, GlobalKey cardKey) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Scrollable.ensureVisible(
-            cardKey.currentContext!,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeInOut,
-          );
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: gold,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: gold.withOpacity(0.25),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
+                return SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() => _selectedPlan = planType);
+                      if (planType != 'Free') {
+                        final pLabel = _billingPeriod == 'monthly'
+                            ? (planType == 'Core' ? '\$19/mo' : '\$49/mo')
+                            : (planType == 'Core' ? '\$13/mo' : '\$33/mo');
+                        _showPaymentFlow(title, pLabel, rawPrice);
+                      }
+                    },
+                    style: TextButton.styleFrom(
+                      backgroundColor: isGuardian ? gold : Colors.transparent,
+                      side: isGuardian ? null : const BorderSide(color: borderActive, width: 1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                    child: Text(
+                      'SELECT $title',
+                      style: monoStyle(
+                          fontSize: 10,
+                          color: isGuardian ? Colors.black : gold,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              }),
             ],
           ),
-          child: Text(
-            label,
-            style: monoStyle(
-              fontSize: 10,
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -3636,53 +3786,79 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
         ),
         const SizedBox(height: 16),
         
-        // QR Code Display
-        Center(
-          child: Column(
-            children: [
-              _QrCodeWidget(),
-              const SizedBox(height: 10),
-              Text(
-                'Scan to pay ₹$inrVal',
-                style: _mStyle(fontSize: 9, color: Colors.white70),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        
-        // Copy UPI ID
-        Text(
-          'OR PAY TO UPI ID:',
-          style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
+        // QR Code + UPI ID compact card
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF141414),
-            border: Border.all(color: const Color(0xFF222222)),
-            borderRadius: BorderRadius.circular(6),
+            color: const Color(0xFF0A0A0A),
+            border: Border.all(color: const Color(0xFF1E3A2F)),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                'sarathim1000@okhdfcbank',
-                style: _mStyle(fontSize: 10, color: Colors.white70),
+              // QR
+              Container(
+                width: 110,
+                height: 110,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: Image.asset(
+                    'assets/images/upi_qr.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
-              InkWell(
-                onTap: () => _copyToClipboard('sarathim1000@okhdfcbank', 'UPI ID'),
-                child: Text(
-                  'COPY ID',
-                  style: _mStyle(fontSize: 8, color: gold, fontWeight: FontWeight.bold),
+              const SizedBox(width: 14),
+              // Details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('SCAN & PAY', style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('₹$inrVal INR', style: _mStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    const Divider(color: Color(0xFF1E1E1E), height: 1),
+                    const SizedBox(height: 8),
+                    Text('UPI ID', style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text('sarathim1000@okhdfcbank',
+                              style: _mStyle(fontSize: 9, color: Colors.white70)),
+                        ),
+                        GestureDetector(
+                          onTap: () => _copyToClipboard('sarathim1000@okhdfcbank', 'UPI ID'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: buyGreen.withOpacity(0.1),
+                              border: Border.all(color: buyGreen.withOpacity(0.4)),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text('COPY', style: _mStyle(fontSize: 7, color: buyGreen, fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Google Pay · PhonePe · Paytm', style: _mStyle(fontSize: 8, color: Colors.white24)),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        
+        const SizedBox(height: 14),
+
+
         // Form field: UTR
         Text(
           'UPI TRANSACTION ID (UTR / REF NO.):',
@@ -4254,82 +4430,3 @@ class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderSta
   }
 }
 
-class _QrCodeWidget extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 140,
-      height: 140,
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: CustomPaint(
-        painter: _QrCodePainter(),
-      ),
-    );
-  }
-}
-
-class _QrCodePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Draw background matrix dots
-    final random = Random(42);
-    const dotSize = 4.0;
-    const spacing = 8.0;
-    
-    // Draw QR Finder patterns (squares in corners)
-    final finderPaint = Paint()
-      ..color = const Color(0xFF10B981)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-
-    // Top-Left Finder
-    canvas.drawRect(const Rect.fromLTWH(8, 8, 32, 32), finderPaint);
-    canvas.drawRect(const Rect.fromLTWH(14, 14, 20, 20), Paint()..color = const Color(0xFF10B981));
-
-    // Top-Right Finder
-    canvas.drawRect(Rect.fromLTWH(size.width - 40, 8, 32, 32), finderPaint);
-    canvas.drawRect(Rect.fromLTWH(size.width - 34, 14, 20, 20), Paint()..color = const Color(0xFF10B981));
-
-    // Bottom-Left Finder
-    canvas.drawRect(Rect.fromLTWH(8, size.height - 40, 32, 32), finderPaint);
-    canvas.drawRect(Rect.fromLTWH(14, size.height - 34, 20, 20), Paint()..color = const Color(0xFF10B981));
-
-    // Draw random techy QR blocks
-    final blockPaint = Paint()..color = const Color(0xFF000000);
-    for (double x = 40; x < size.width - 40; x += spacing) {
-      for (double y = 8; y < size.height - 8; y += spacing) {
-        if (random.nextDouble() > 0.45) {
-          canvas.drawRect(Rect.fromLTWH(x + 2, y + 2, dotSize, dotSize), blockPaint);
-        }
-      }
-    }
-    
-    // Draw some lines for tech feel
-    for (double x = 8; x < size.width - 8; x += spacing) {
-      // Bottom area
-      for (double y = size.height - 40; y < size.height - 8; y += spacing) {
-        if (x < 40) continue; // Skip Finder
-        if (random.nextDouble() > 0.4) {
-          canvas.drawRect(Rect.fromLTWH(x + 2, y + 2, dotSize, dotSize), blockPaint);
-        }
-      }
-      // Right area
-      for (double y = 8; y < size.height - 40; y += spacing) {
-        if (x >= size.width - 40) {
-          if (y >= 40) {
-            if (random.nextDouble() > 0.4) {
-              canvas.drawRect(Rect.fromLTWH(x + 2, y + 2, dotSize, dotSize), blockPaint);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

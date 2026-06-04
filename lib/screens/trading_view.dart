@@ -1882,7 +1882,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
           ),
           const SizedBox(height: 8),
           GoldButton(
-            label: 'EXECUTE $_selectedOrderType $_selectedLot LOT',
+            label: 'EXECUTE TRADE',
             onTap: _executeTrade,
           ),
         ],

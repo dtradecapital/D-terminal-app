@@ -108,37 +108,23 @@ class IntelligenceService {
   ));
 
   Future<List<EconomicEvent>> fetchEconomicCalendar() async {
+    // Twelve Data supports CORS — works on both web and native.
     try {
-      // Primary: Try custom AI proxy service which aggregates multiple providers
-      final response = await _dio.get('${ApiConstants.aiServiceUrl}/market/calendar');
+      final response = await Dio().get(
+        'https://api.twelvedata.com/economic_calendar',
+        queryParameters: {'apikey': ApiConstants.twelveDataApiKey},
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        final List<dynamic> events = response.data['events'] ?? [];
+        final List<dynamic> events = response.data['economic_calendar'] ?? [];
         if (events.isNotEmpty) {
           return events.take(24).map((e) => EconomicEvent.fromJson(e)).toList();
         }
       }
-      
-      // Secondary: Try Twelve Data as fallback if proxy fails
-      final tdResponse = await _dio.get(
-        'https://api.twelvedata.com/economic_calendar',
-        queryParameters: {
-          'apikey': ApiConstants.twelveDataApiKey,
-        },
-      ).timeout(const Duration(seconds: 5));
-
-      if (tdResponse.statusCode == 200) {
-        final List<dynamic> events = tdResponse.data['economic_calendar'] ?? [];
-        if (events.isNotEmpty) {
-          return events.take(20).map((e) => EconomicEvent.fromJson(e)).toList();
-        }
-      }
-      
-      return _getFallbackCalendar();
     } catch (e) {
       debugPrint('Error fetching economic calendar: $e');
-      return _getFallbackCalendar();
     }
+    return _getFallbackCalendar();
   }
 
   List<EconomicEvent> _getFallbackCalendar() {
@@ -210,26 +196,83 @@ class IntelligenceService {
   }
 
   Future<List<TradeSignal>> fetchSignals() async {
+    // Twelve Data /rsi and /macd indicator endpoints do not support CORS —
+    // they hang on Flutter Web until timeout. Use fallback on web.
+    if (kIsWeb) return _getFallbackSignals();
+
+    // Native: compute live signals from RSI + MACD (2 batched API calls).
+    const pairs = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY'];
+    const symbolStr = 'XAU/USD,EUR/USD,GBP/USD,USD/JPY';
     try {
-      // Trying the AI service URL first with real-time authentication
-      final response = await _dio.get('${ApiConstants.aiServiceUrl}/market/signals', queryParameters: {
-        'apikey': ApiConstants.twelveDataApiKey,
-      });
-      if (response.statusCode == 200) {
-        final List<dynamic> signals = response.data is List ? response.data : response.data['signals'] ?? [];
-        return signals.map((s) => TradeSignal.fromJson(s)).toList();
+      final dio = Dio();
+      final results = await Future.wait([
+        dio.get('https://api.twelvedata.com/rsi', queryParameters: {
+          'symbol': symbolStr, 'interval': '1h', 'outputsize': '2',
+          'apikey': ApiConstants.twelveDataApiKey,
+        }).timeout(const Duration(seconds: 8)),
+        dio.get('https://api.twelvedata.com/macd', queryParameters: {
+          'symbol': symbolStr, 'interval': '1h', 'outputsize': '1',
+          'apikey': ApiConstants.twelveDataApiKey,
+        }).timeout(const Duration(seconds: 8)),
+      ]);
+
+      final rsiData = results[0].statusCode == 200 ? results[0].data : {};
+      final macdData = results[1].statusCode == 200 ? results[1].data : {};
+      final signals = <TradeSignal>[];
+
+      for (final pair in pairs) {
+        final rsiPair = rsiData[pair];
+        if (rsiPair == null || rsiPair['status'] == 'error') continue;
+        final rsiValues = rsiPair['values'] as List? ?? [];
+        if (rsiValues.isEmpty) continue;
+        final rsi = double.tryParse(rsiValues[0]['rsi']?.toString() ?? '') ?? 50.0;
+
+        double? macdLine;
+        final macdPair = macdData[pair];
+        if (macdPair != null && macdPair['status'] != 'error') {
+          final mv = macdPair['values'] as List? ?? [];
+          if (mv.isNotEmpty) macdLine = double.tryParse(mv[0]['macd']?.toString() ?? '');
+        }
+
+        String type; String headline; List<String> tags; int confidence;
+        if (rsi > 70) {
+          type = 'SELL'; confidence = ((rsi - 70) / 30 * 100).clamp(58, 95).toInt();
+          headline = 'RSI overbought at ${rsi.toStringAsFixed(1)} on $pair; bearish reversal probable.';
+          tags = ['RSI', 'OVERBOUGHT', 'REVERSAL'];
+        } else if (rsi < 30) {
+          type = 'BUY'; confidence = ((30 - rsi) / 30 * 100).clamp(58, 95).toInt();
+          headline = 'RSI oversold at ${rsi.toStringAsFixed(1)} on $pair; bullish bounce expected.';
+          tags = ['RSI', 'OVERSOLD', 'BOUNCE'];
+        } else if (macdLine != null && macdLine > 0 && rsi > 50) {
+          type = 'BUY'; confidence = ((rsi - 50) / 50 * 60 + 50).clamp(52, 85).toInt();
+          headline = 'MACD bullish crossover with rising RSI momentum on $pair.';
+          tags = ['MACD', 'MOMENTUM', 'BULLISH'];
+        } else if (macdLine != null && macdLine < 0 && rsi < 50) {
+          type = 'SELL'; confidence = ((50 - rsi) / 50 * 60 + 50).clamp(52, 85).toInt();
+          headline = 'MACD bearish crossover; downward pressure building on $pair.';
+          tags = ['MACD', 'MOMENTUM', 'BEARISH'];
+        } else {
+          type = rsi >= 50 ? 'BUY' : 'SELL'; confidence = 55;
+          headline = '${rsi >= 50 ? 'Mild bullish' : 'Mild bearish'} bias detected at RSI ${rsi.toStringAsFixed(1)} on $pair.';
+          tags = ['TECHNICAL', 'RSI', 'NEUTRAL'];
+        }
+        signals.add(TradeSignal(
+          pair: pair, type: type, headline: headline, tags: tags,
+          confidence: confidence, timeframe: 'H1', status: 'ACTIVE',
+        ));
       }
-      return _getFallbackSignals();
+      if (signals.isNotEmpty) return signals;
     } catch (e) {
       debugPrint('Error fetching signals: $e');
-      return _getFallbackSignals();
     }
+    return _getFallbackSignals();
   }
 
   Future<Map<String, Map<String, double>>> fetchCorrelationMatrix() async {
+    if (kIsWeb) return _getMockMatrix();
+
+
     try {
-      // High-performance intel providers use specific risk correlations.
-      // We'll fetch real market data for column headers and combine with risk scores.
       final response = await _dio.get('${ApiConstants.aiServiceUrl}/market/correlation-matrix', queryParameters: {
         'apikey': ApiConstants.twelveDataApiKey,
       });
@@ -307,6 +350,8 @@ class IntelligenceService {
   }
 
   Future<String> fetchSituationalReport() async {
+    if (kIsWeb) return _getDefaultSitRep();
+
     try {
       final response = await _dio.get('${ApiConstants.aiServiceUrl}/market/analysis/summary');
       if (response.statusCode == 200) {
