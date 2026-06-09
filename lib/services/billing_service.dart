@@ -57,24 +57,21 @@ class UserSubscription {
 class BillingService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  Stream<List<PaymentHistory>> getPaymentHistoryStream() {
+  Future<List<PaymentHistory>> getPaymentHistory() async {
     final user = _client.auth.currentUser;
-    if (user == null) return Stream.value([]);
+    if (user == null) return [];
 
     try {
-      return _client
+      final response = await _client
           .from('payments')
-          .stream(primaryKey: ['id'])
+          .select()
           .eq('user_id', user.id)
-          .order('created_at')
-          .map((data) => data.map((json) => PaymentHistory.fromJson(json)).toList())
-          .handleError((error) {
-            debugPrint('Billing Stream Error: $error');
-            return <PaymentHistory>[];
-          });
+          .order('created_at', ascending: false);
+      
+      return (response as List).map((json) => PaymentHistory.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Billing Stream Init Error: $e');
-      return Stream.value([]);
+      debugPrint('Billing History Error: $e');
+      return [];
     }
   }
 
@@ -192,34 +189,36 @@ class BillingService {
     }
   }
 
-  Stream<String?> getVerificationStatusStream() {
+  Future<String?> getVerificationStatus() async {
     final user = _client.auth.currentUser;
-    if (user == null) return Stream.value(null);
+    if (user == null) return null;
 
     try {
-      return _client
+      final response = await _client
           .from('payment_submissions')
-          .stream(primaryKey: ['id'])
+          .select()
           .eq('user_id', user.id)
           .order('created_at', ascending: false)
           .limit(1)
-          .map((data) => data.isEmpty ? null : data.first['status']?.toString());
+          .maybeSingle();
+      return response?['status']?.toString();
     } catch (e) {
-      return Stream.value(null);
+      debugPrint('Verification Status Error: $e');
+      return null;
     }
   }
 }
 
 final billingServiceProvider = Provider((ref) => BillingService());
 
-final paymentHistoryProvider = StreamProvider<List<PaymentHistory>>((ref) {
-  return ref.watch(billingServiceProvider).getPaymentHistoryStream();
+final paymentHistoryProvider = FutureProvider<List<PaymentHistory>>((ref) {
+  return ref.watch(billingServiceProvider).getPaymentHistory();
 });
 
 final userSubscriptionProvider = FutureProvider<UserSubscription>((ref) {
   return ref.watch(billingServiceProvider).getUserSubscription();
 });
 
-final verificationStatusProvider = StreamProvider<String?>((ref) {
-  return ref.watch(billingServiceProvider).getVerificationStatusStream();
+final verificationStatusProvider = FutureProvider<String?>((ref) {
+  return ref.watch(billingServiceProvider).getVerificationStatus();
 });

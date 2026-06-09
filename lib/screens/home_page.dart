@@ -191,6 +191,68 @@ class _HomePageState extends ConsumerState<HomePage> {
           // Center/Right: Mode Toggle + Virtual Balance Chip + Avatar
           Row(
             children: [
+              // Notification Bell
+              Builder(builder: (context) {
+                final unreadCount = ref.watch(alertsProvider).where((a) => a['isRead'] == 'false').length;
+                return MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () {
+                      ref.read(accountMenuProvider.notifier).state = 'ALERTS';
+                      setState(() {
+                        _currentIndex = 2; // Direct to Account page
+                      });
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: const Color(0xFF141414),
+                            border: Border.all(color: const Color(0xFF222222), width: 1),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.notifications_none,
+                            color: Colors.white70,
+                            size: 14,
+                          ),
+                        ),
+                        if (unreadCount > 0)
+                          Positioned(
+                            top: -2,
+                            right: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFE05252), // sleek red
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 12,
+                                minHeight: 12,
+                              ),
+                              child: Text(
+                                '$unreadCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 7,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.0,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
 
               // Avatar
               Builder(builder: (ctx) {
@@ -202,7 +264,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                 return MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(
-                    onTap: () => setState(() => _currentIndex = 2),
+                    onTap: () {
+                      ref.read(accountMenuProvider.notifier).state = 'PROFILE';
+                      setState(() => _currentIndex = 2);
+                    },
                     child: Container(
                       width: 28,
                       height: 28,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -51,6 +52,6 @@ class CommunityService {
 
 final communityServiceProvider = Provider((ref) => CommunityService());
 
-final communityMessagesProvider = StreamProvider<List<CommunityMessage>>((ref) {
-  return ref.watch(communityServiceProvider).getMessagesStream();
+final communityMessagesProvider = FutureProvider<List<CommunityMessage>>((ref) async {
+  return ref.watch(communityServiceProvider).getMessages();
 });

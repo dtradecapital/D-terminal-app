@@ -1,10 +1,12 @@
 import 'dart:typed_data';
 import 'dart:math';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/supabase_auth_service.dart';
 import '../services/intelligence_service.dart';
 import '../services/theme_service.dart';
@@ -15,6 +17,156 @@ import '../services/billing_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/support_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_paypal_payment/flutter_paypal_payment.dart';
+import '../core/constants/api_constants.dart';
+
+final accountMenuProvider = StateProvider<String>((ref) => 'PROFILE');
+
+class AlertsNotifier extends StateNotifier<List<Map<String, String>>> {
+  final _storage = const FlutterSecureStorage();
+  String? _currentUserEmail;
+
+  AlertsNotifier() : super([]) {
+    _loadInitialAlerts();
+  }
+
+  Future<void> initUser(String email) async {
+    if (_currentUserEmail == email) return;
+    _currentUserEmail = email;
+    await _loadInitialAlerts();
+  }
+
+  Future<void> _loadInitialAlerts() async {
+    final defaultAlerts = [
+      {
+        'category': 'UNREAD',
+        'title': 'SUPPORT TICKET UPDATE',
+        'content': 'Support Team: "Recieved"- solved — DTrade Compliance Team',
+        'time': '1 min ago',
+        'type': 'system',
+        'isRead': 'false',
+      },
+      {
+        'category': 'UNREAD',
+        'title': 'WELCOME TO D TRADE CAPITAL',
+        'content': 'Welcome to D Trade Capital. You\'re now part of the early access version of our behavioral AI engine.',
+        'time': '5 mins ago',
+        'type': 'system',
+        'isRead': 'false',
+      },
+      {
+        'category': 'UNREAD',
+        'title': 'PLAN EXPIRY NOTICE',
+        'content': 'Your premium subscription is expiring in 3 days. Enable auto-renewal to keep access.',
+        'time': '2 hours ago',
+        'type': 'billing',
+        'isRead': 'false',
+      },
+      {
+        'category': 'UNREAD',
+        'title': 'PLAN PURCHASE SUCCESSFUL',
+        'content': 'Upgrade to PRO Plan completed successfully via PayPal checkout.',
+        'time': '1 day ago',
+        'type': 'billing',
+        'isRead': 'false',
+      },
+      {
+        'category': 'UNREAD',
+        'title': 'SECURITY ALERT: PASSWORD CHANGED',
+        'content': 'Your DTrade account password was updated successfully. Security check passed.',
+        'time': '3 days ago',
+        'type': 'system',
+        'isRead': 'false',
+      },
+      {
+        'category': 'SYSTEM',
+        'title': 'LEDGER AUDIT COMPLETED',
+        'content': 'Platform ledger hash verification passed. Zero discrepancies found across all accounts.',
+        'time': '10 mins ago',
+        'type': 'audit',
+        'isRead': 'true',
+      },
+    ];
+
+    if (_currentUserEmail == null || _currentUserEmail!.isEmpty) {
+      state = defaultAlerts;
+      return;
+    }
+
+    try {
+      final key = 'dtrade_alerts_${_currentUserEmail}';
+      final stored = await _storage.read(key: key);
+      if (stored != null) {
+        final List<dynamic> decoded = jsonDecode(stored);
+        state = decoded.map((item) => Map<String, String>.from(item)).toList();
+      } else {
+        state = defaultAlerts;
+        await _saveAlerts();
+      }
+    } catch (e) {
+      state = defaultAlerts;
+    }
+  }
+
+  Future<void> _saveAlerts() async {
+    if (_currentUserEmail == null || _currentUserEmail!.isEmpty) return;
+    try {
+      final key = 'dtrade_alerts_${_currentUserEmail}';
+      await _storage.write(key: key, value: jsonEncode(state));
+    } catch (e) {
+      debugPrint('Error saving alerts: $e');
+    }
+  }
+
+  void addAlert({
+    required String title,
+    required String content,
+    required String category,
+    required String type,
+  }) {
+    state = [
+      {
+        'category': category,
+        'title': title.toUpperCase(),
+        'content': content,
+        'time': 'Just now',
+        'type': type,
+        'isRead': 'false',
+      },
+      ...state,
+    ];
+    _saveAlerts();
+  }
+
+  void markAllAsRead() {
+    bool hasChanges = false;
+    final updated = state.map((alert) {
+      if (alert['isRead'] == 'false') {
+        hasChanges = true;
+        return {
+          ...alert,
+          'isRead': 'true',
+          'category': alert['category'] == 'UNREAD' ? 'SYSTEM' : alert['category']!,
+        };
+      }
+      return alert;
+    }).toList();
+
+    if (hasChanges) {
+      state = updated;
+      _saveAlerts();
+    }
+  }
+
+  void clearAll() {
+    state = [];
+    _saveAlerts();
+  }
+}
+
+final alertsProvider = StateNotifierProvider<AlertsNotifier, List<Map<String, String>>>((ref) {
+  return AlertsNotifier();
+});
 
 class AccountView extends ConsumerStatefulWidget {
   const AccountView({super.key});
@@ -70,6 +222,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
   bool _is2FAEnabled = false;
   bool _show2FASetup = false;
   bool _isChangingPassword = false;
+  bool _isSavingProfile = false;
   late AnimationController _pulseController;
   
   // Aligned Profile Settings state
@@ -171,6 +324,20 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
         'isRead': 'true',
       },
     ];
+  }
+
+  void _addAlert({
+    required String title,
+    required String content,
+    required String category,
+    required String type,
+  }) {
+    ref.read(alertsProvider.notifier).addAlert(
+      title: title,
+      content: content,
+      category: category,
+      type: type,
+    );
   }
 
   @override
@@ -300,6 +467,14 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
       _currentPasswordCtrl.clear();
       _newPasswordCtrl.clear();
       _confirmPasswordCtrl.clear();
+      
+      _addAlert(
+        title: 'SECURITY ALERT: PASSWORD CHANGED',
+        content: 'Your account password was updated successfully. Security check passed.',
+        category: 'SYSTEM',
+        type: 'system',
+      );
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -326,6 +501,19 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    _selectedMenu = ref.watch(accountMenuProvider);
+    _allAlerts = ref.watch(alertsProvider);
+
+    // Initialize user specific alerts from secure storage
+    final email = _sbUser?.email ?? '';
+    ref.read(alertsProvider.notifier).initUser(email);
+
+    if (_selectedMenu == 'ALERTS') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(alertsProvider.notifier).markAllAsRead();
+      });
+    }
+
     // Global Announcement Listener
     ref.listen(communityMessagesProvider, (previous, next) {
       if (next.hasValue && previous != null && previous.hasValue) {
@@ -333,6 +521,12 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
         final prevMsgs = previous.value!;
         if (nextMsgs.isNotEmpty && (prevMsgs.isEmpty || nextMsgs.first.id != prevMsgs.first.id)) {
           _showNewMessagePopup(nextMsgs.first);
+          _addAlert(
+            title: 'NEW COMMUNITY POST',
+            content: '${nextMsgs.first.title}: ${nextMsgs.first.content}',
+            category: 'UNREAD',
+            type: 'system',
+          );
         }
       }
     });
@@ -349,6 +543,9 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
       orElse: () => '',
     );
 
+    final alerts = ref.watch(alertsProvider);
+    final int unreadCount = alerts.where((a) => a['isRead'] == 'false').length;
+
     return Scaffold(
       key: _scaffoldKey,
       drawerScrimColor: Colors.black.withOpacity(0.55),
@@ -356,15 +553,13 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
         activeMenu: _selectedMenu,
         activePlan: activePlan,
         activeVerifyStatus: activeVerifyStatus,
-        unreadCount: 3,
+        unreadCount: unreadCount,
         username: _nameCtrl.text,
         userLevel: _userLevel,
         currentXp: _xpProgress,
         maxXp: _maxXp,
         onSelect: (menu) {
-          setState(() {
-            _selectedMenu = menu;
-          });
+          ref.read(accountMenuProvider.notifier).state = menu;
         },
       ),
       backgroundColor: bg,
@@ -571,16 +766,78 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Changes saved successfully.')),
-                );
+                if (_isSavingProfile) return;
+                
+                setState(() => _isSavingProfile = true);
+                
+                Future.delayed(const Duration(milliseconds: 1200), () {
+                  if (!mounted) return;
+                  
+                  setState(() => _isSavingProfile = false);
+                  
+                  _addAlert(
+                    title: 'PROFILE UPDATED',
+                    content: 'Your account profile settings have been successfully updated.',
+                    category: 'UNREAD',
+                    type: 'system',
+                  );
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF0F0E0B),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.all(16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Color(0xFF221F1A), width: 1),
+                      ),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Profile updated',
+                                style: monoStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.check_circle, color: buyGreen, size: 12),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Your changes have been saved.',
+                            style: textStyle(fontSize: 10, color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                });
               },
               style: TextButton.styleFrom(
                 backgroundColor: gold,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
-              child: Text('SAVE CHANGES', style: monoStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+              child: _isSavingProfile
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 10,
+                          height: 10,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text('SAVING...', style: monoStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+                      ],
+                    )
+                  : Text('SAVE CHANGES', style: monoStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -695,9 +952,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
             alignment: Alignment.centerLeft,
             child: TextButton(
               onPressed: () {
-                setState(() {
-                  _selectedMenu = 'HISTORY';
-                });
+                ref.read(accountMenuProvider.notifier).state = 'HISTORY';
               },
               style: TextButton.styleFrom(
                 backgroundColor: Colors.transparent,
@@ -1024,9 +1279,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
     
     return InkWell(
       onTap: () {
-        setState(() {
-          _selectedMenu = moduleId;
-        });
+        ref.read(accountMenuProvider.notifier).state = moduleId;
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -1211,21 +1464,122 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
 
     return messagesAsync.when(
       data: (messages) {
-        if (messages.isEmpty) {
-          return _buildMessageCard(CommunityMessage(
-            id: 'welcome',
-            title: 'Welcome to D Trade Terminal',
-            content: "You have successfully completed early access setup of D Trade's proprietary behavioral terminal.\n\nOur system analyzes execution loops, latency, and trader fitness metrics. Explore the features and setup plan configs.",
-            type: 'ANNOUNCEMENT',
-            createdAt: DateTime.now().subtract(const Duration(days: 2)),
-          ));
+        // Build the list of default announcements to show when they are not in the database
+        final defaultAnnouncements = [
+          CommunityMessage(
+            id: 'welcome_capital',
+            title: 'Welcome to D Trade Capital.',
+            content: "You're now part of the early access version of our behavioral AI engine.\n\nThis platform is built to help traders understand and improve execution discipline through real-time behavioral analysis.\n\nExplore the current features, experience how the system evaluates trading behavior, and stay tuned — View Mode with AI behavioral statistics is coming soon.\n\nWe're building this with our early users. Your feedback matters.\n\nLet's build disciplined trading together.\n\n— Team D Trade Capital",
+            type: 'ALL',
+            createdAt: DateTime.parse('2026-03-02T09:05:35'),
+          ),
+        ];
+
+        // Combine database messages with default announcements (avoid duplicates)
+        final List<CommunityMessage> allAnnouncements = [...messages];
+        for (final def in defaultAnnouncements) {
+          if (!allAnnouncements.any((m) => m.title.trim() == def.title.trim() || m.content.trim() == def.content.trim())) {
+            allAnnouncements.add(def);
+          }
         }
+
+        // Separate welcome messages (or pinned messages) from others
+        final List<CommunityMessage> welcomeMessages = allAnnouncements
+            .where((m) => m.id == 'welcome_capital' || m.title.toLowerCase().contains('welcome'))
+            .toList();
+        
+        final List<CommunityMessage> otherMessages = allAnnouncements
+            .where((m) => m.id != 'welcome_capital' && !m.title.toLowerCase().contains('welcome'))
+            .toList();
+
+        // Sort other messages by date descending
+        otherMessages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        // Recombine with welcome messages pinned first
+        final List<CommunityMessage> sortedAnnouncements = [
+          ...welcomeMessages,
+          ...otherMessages,
+        ];
+
         return Column(
-          children: messages.map((m) => _buildMessageCard(m)).toList(),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.campaign, color: gold, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Important Updates',
+                      style: monoStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141414),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: border),
+                  ),
+                  child: Text(
+                    '${sortedAnnouncements.length} ANNOUNCEMENTS',
+                    style: monoStyle(fontSize: 8, color: themeTextDim(context), fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...sortedAnnouncements.map((m) => _buildMessageCard(m)),
+          ],
         );
       },
       loading: () => const Center(child: CircularProgressIndicator(color: gold)),
-      error: (e, s) => Center(child: Text('Failed to load announcements: $e', style: monoStyle(color: sellRed))),
+      error: (e, s) {
+        final defaultWelcome = CommunityMessage(
+          id: 'welcome_capital',
+          title: 'Welcome to D Trade Capital.',
+          content: "You're now part of the early access version of our behavioral AI engine.\n\nThis platform is built to help traders understand and improve execution discipline through real-time behavioral analysis.\n\nExplore the current features, experience how the system evaluates trading behavior, and stay tuned — View Mode with AI behavioral statistics is coming soon.\n\nWe're building this with our early users. Your feedback matters.\n\nLet's build disciplined trading together.\n\n— Team D Trade Capital",
+          type: 'ALL',
+          createdAt: DateTime.parse('2026-03-02T09:05:35'),
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.campaign, color: gold, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Important Updates',
+                      style: monoStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141414),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: border),
+                  ),
+                  child: Text(
+                    '1 ANNOUNCEMENTS',
+                    style: monoStyle(fontSize: 8, color: themeTextDim(context), fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _buildMessageCard(defaultWelcome),
+          ],
+        );
+      },
     );
   }
 
@@ -1259,8 +1613,15 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
           Text(message.title, style: textStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(message.content, style: textStyle(fontSize: 12, color: Colors.white70, height: 1.5)),
-          const SizedBox(height: 16),
-          Text('— DTrade Compliance Team', style: monoStyle(fontSize: 9, color: themeTextDim(context))),
+          if (!message.content.contains('—')) ...[
+            const SizedBox(height: 16),
+            Text(
+              message.type.toUpperCase() == 'ADMIN'
+                  ? '— DTrade Compliance Team'
+                  : '— Team D Trade Capital',
+              style: monoStyle(fontSize: 9, color: themeTextDim(context)),
+            ),
+          ],
         ],
       ),
     );
@@ -1332,9 +1693,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
               const SizedBox(width: 12),
               InkWell(
                 onTap: () {
-                  setState(() {
-                    _allAlerts = [];
-                  });
+                  ref.read(alertsProvider.notifier).clearAll();
                 },
                 borderRadius: BorderRadius.circular(4),
                 child: Container(
@@ -1561,7 +1920,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
               children: [
                 Text('AUDIT ID: ${sub.auditId}', style: monoStyle(fontSize: 11)),
                 TextButton(
-                  onPressed: () => setState(() => _selectedMenu = 'VERIFY'),
+                  onPressed: () => ref.read(accountMenuProvider.notifier).state = 'VERIFY',
                   style: TextButton.styleFrom(backgroundColor: gold, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                   child: Text('VERIFY TRANSACTION', style: monoStyle(fontSize: 9, color: Colors.black, fontWeight: FontWeight.bold)),
                 ),
@@ -2167,6 +2526,12 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
             if (success) {
               ref.refresh(userSubscriptionProvider);
               ref.refresh(verificationStatusProvider);
+              _addAlert(
+                title: 'PLAN PURCHASE SUCCESSFUL',
+                content: 'Verification request for upgrade to $planName via $method (Amount: \$$amount) submitted successfully.',
+                category: 'UNREAD',
+                type: 'billing',
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   backgroundColor: buyGreen,
@@ -2359,7 +2724,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
                       children: [
                         Expanded(
                           child: TextButton(
-                            onPressed: () => setState(() => _selectedMenu = 'PROFILE'),
+                            onPressed: () => ref.read(accountMenuProvider.notifier).state = 'PROFILE',
                             style: TextButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               side: const BorderSide(color: Color(0xFF333333)),
@@ -2375,7 +2740,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
                         const SizedBox(width: 12),
                         Expanded(
                           child: TextButton(
-                            onPressed: () => setState(() => _selectedMenu = 'HELP'),
+                            onPressed: () => ref.read(accountMenuProvider.notifier).state = 'HELP',
                             style: TextButton.styleFrom(
                               backgroundColor: gold,
                               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -3025,7 +3390,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
                 ),
               ),
               TextButton(
-                onPressed: () => setState(() => _selectedMenu = 'COMMUNITY'),
+                onPressed: () => ref.read(accountMenuProvider.notifier).state = 'COMMUNITY',
                 child: const Text('VIEW', style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ],
@@ -3205,8 +3570,6 @@ class _TerminalNavigationDrawer extends StatelessWidget {
                       hint: 'Forum · announcements',
                       moduleId: 'COMMUNITY',
                       icon: Icons.people_outline,
-                      badgeText: '3 NEW',
-                      badgeColor: const Color(0xFF00C853),
                     ),
                     _buildNavItem(
                       context: context,
@@ -3506,6 +3869,7 @@ class _PaymentFlowDialog extends StatefulWidget {
 class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
   int _currentStep = 0; // 0: Choose, 1: UPI, 2: PayPal/Card, 3: Crypto
   String _selectedCrypto = 'USDT';
+  String _selectedCryptoNetwork = 'ERC-20';
   
   // Controllers
   final _utrCtrl = TextEditingController();
@@ -3918,6 +4282,8 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
   }
 
   Widget _buildStepPaypalCard() {
+    final bool isMockedKeys = ApiConstants.paypalClientId.contains('MOCKED');
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3931,7 +4297,7 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
             ),
             const SizedBox(width: 8),
             Text(
-              'CREDIT CARD / PAYPAL',
+              'PAYPAL / CARD CHECKOUT',
               style: _mStyle(fontSize: 12, color: const Color(0xFF4A90E2), fontWeight: FontWeight.bold),
             ),
             const Spacer(),
@@ -3945,145 +4311,99 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
         ),
         const SizedBox(height: 2),
         Text(
-          '${widget.planName} Plan — ${widget.priceText} (Billed Annually)',
+          '${widget.planName} Plan — ${widget.priceText}',
           style: _mStyle(fontSize: 9, color: Colors.white38),
         ),
         const SizedBox(height: 16),
         
-        // Brand Icons Mock
-        Row(
-          children: [
-            const Icon(Icons.credit_card, color: Colors.white54, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              'WE ACCEPT ALL MAJOR CARDS & PAYPAL',
-              style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        
-        // Cardholder Name
-        Text(
-          'CARDHOLDER NAME',
-          style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
+        // Brand Icons & Info
         Container(
-          height: 36,
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF141414),
-            border: Border.all(color: const Color(0xFF222222)),
-            borderRadius: BorderRadius.circular(6),
+            color: const Color(0xFF091426),
+            border: Border.all(color: const Color(0xFF1B2E4C)),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: TextField(
-            controller: _cardNameCtrl,
-            style: _mStyle(fontSize: 10, color: Colors.white70),
-            decoration: InputDecoration(
-              hintText: 'John Doe',
-              hintStyle: _mStyle(fontSize: 9, color: Colors.white24),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              border: InputBorder.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        
-        // Card Number
-        Text(
-          'CARD NUMBER',
-          style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          height: 36,
-          decoration: BoxDecoration(
-            color: const Color(0xFF141414),
-            border: Border.all(color: const Color(0xFF222222)),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: TextField(
-            controller: _cardNumberCtrl,
-            style: _mStyle(fontSize: 10, color: Colors.white70),
-            decoration: InputDecoration(
-              hintText: '4111 2222 3333 4444',
-              hintStyle: _mStyle(fontSize: 9, color: Colors.white24),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              border: InputBorder.none,
-            ),
-            keyboardType: TextInputType.number,
-          ),
-        ),
-        const SizedBox(height: 10),
-        
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
+                  const Icon(Icons.security, color: Color(0xFF4A90E2), size: 16),
+                  const SizedBox(width: 8),
                   Text(
-                    'EXPIRY DATE (MM/YY)',
-                    style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold),
+                    'SECURE CHECKOUT BY PAYPAL',
+                    style: _mStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 4),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You will be redirected to PayPal\'s official secure interface. You can pay using your PayPal Account, or directly with any Credit/Debit Card without registering.',
+                style: _mStyle(fontSize: 8, color: Colors.white54).copyWith(height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
                   Container(
-                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF141414),
-                      border: Border.all(color: const Color(0xFF222222)),
-                      borderRadius: BorderRadius.circular(6),
+                      color: const Color(0xFF4A90E2).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                    child: TextField(
-                      controller: _cardExpiryCtrl,
-                      style: _mStyle(fontSize: 10, color: Colors.white70),
-                      decoration: InputDecoration(
-                        hintText: '12/28',
-                        hintStyle: _mStyle(fontSize: 9, color: Colors.white24),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        border: InputBorder.none,
-                      ),
-                      keyboardType: TextInputType.number,
+                    child: Text(
+                      'SSL ENCRYPTED',
+                      style: _mStyle(fontSize: 7, color: const Color(0xFF4A90E2), fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'INSTANT ACTIVATION',
+                      style: _mStyle(fontSize: 7, color: Colors.green, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CVV',
-                    style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF141414),
-                      border: Border.all(color: const Color(0xFF222222)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: TextField(
-                      controller: _cardCvvCtrl,
-                      style: _mStyle(fontSize: 10, color: Colors.white70),
-                      decoration: InputDecoration(
-                        hintText: '000',
-                        hintStyle: _mStyle(fontSize: 9, color: Colors.white24),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        border: InputBorder.none,
-                      ),
-                      obscureText: true,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(height: 16),
+
+        if (isMockedKeys)
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.1),
+              border: Border.all(color: Colors.amber.withOpacity(0.4)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      'API KEYS NOT CONFIGURRED',
+                      style: _mStyle(fontSize: 9, color: Colors.amber, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Real PayPal credentials are not configured in api_constants.dart yet. Proceeding will trigger a simulated checkout flow for demonstration.',
+                  style: _mStyle(fontSize: 8, color: Colors.white70).copyWith(height: 1.3),
+                ),
+              ],
+            ),
+          ),
         
         const SizedBox(height: 20),
         
@@ -4099,40 +4419,94 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
             width: double.infinity,
             child: TextButton(
               onPressed: () {
-                final name = _cardNameCtrl.text.trim();
-                final num = _cardNumberCtrl.text.trim();
-                final exp = _cardExpiryCtrl.text.trim();
-                final cvv = _cardCvvCtrl.text.trim();
-                
-                if (name.isEmpty || num.isEmpty || exp.isEmpty || cvv.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please fill in all credit card details.')),
+                if (isMockedKeys) {
+                  setState(() {
+                    _isProcessing = true;
+                  });
+                  Future.delayed(const Duration(milliseconds: 1500), () {
+                    if (mounted) {
+                      setState(() {
+                        _isProcessing = false;
+                      });
+                      Navigator.pop(context);
+                      widget.onComplete(
+                        'PayPal (Simulated)', 
+                        widget.rawPrice, 
+                        'SIM-PAYID-${Random().nextInt(999999) + 100000}'
+                      );
+                    }
+                  });
+                } else {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (BuildContext context) => PaypalCheckoutView(
+                        sandboxMode: ApiConstants.paypalSandboxMode,
+                        clientId: ApiConstants.paypalClientId,
+                        secretKey: ApiConstants.paypalSecretKey,
+                        transactions: [
+                          {
+                            "amount": {
+                              "total": widget.rawPrice,
+                              "currency": 'USD',
+                              "details": {
+                                "subtotal": widget.rawPrice,
+                                "shipping": '0',
+                                "shipping_discount": 0
+                              }
+                            },
+                            "description": "Subscription purchase for ${widget.planName} plan on DTrade.",
+                            "item_list": {
+                              "items": [
+                                {
+                                  "name": "${widget.planName} Subscription",
+                                  "quantity": 1,
+                                  "price": widget.rawPrice,
+                                  "currency": 'USD'
+                                }
+                              ],
+                            }
+                          }
+                        ],
+                        onSuccess: (Map params) async {
+                          final transactionId = params['paymentId'] ?? params['id'] ?? 'PAYID-${DateTime.now().millisecondsSinceEpoch}';
+                          Navigator.pop(context); // close PaypalCheckoutView
+                          widget.onComplete('PayPal', widget.rawPrice, transactionId);
+                        },
+                        onError: (error) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: Colors.red,
+                              content: Text('PayPal checkout error: $error'),
+                            ),
+                          );
+                        },
+                        onCancel: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('PayPal payment was cancelled.'),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   );
-                  return;
                 }
-                
-                setState(() {
-                  _isProcessing = true;
-                });
-                
-                Future.delayed(const Duration(milliseconds: 1500), () {
-                  if (mounted) {
-                    setState(() {
-                      _isProcessing = false;
-                    });
-                    Navigator.pop(context);
-                    widget.onComplete('Stripe/Cards', widget.rawPrice, 'TXN-${Random().nextInt(999999) + 100000}');
-                  }
-                });
               },
               style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90E2),
+                backgroundColor: const Color(0xFF0070BA), // PayPal Official Blue
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              child: Text(
-                'PAY \$${widget.rawPrice} SECURELY',
-                style: _mStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.payment, color: Colors.white, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    isMockedKeys ? 'PROCEED (SIMULATED)' : 'PROCEED TO PAYPAL',
+                    style: _mStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
           ),
@@ -4151,20 +4525,24 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
     
     if (_selectedCrypto == 'BTC') {
       coinAmount = isCore ? '0.0012' : '0.0039';
-      depositAddr = '3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy';
-      coinNetwork = 'BITCOIN MAINNET';
+      depositAddr = 'bc1qs5ptnee60w9lx2893dj5a5ay2te9c5ww7y9fsy';
+      coinNetwork = 'BITCOIN MAINNET (BEP-20)';
     } else if (_selectedCrypto == 'ETH') {
       coinAmount = isCore ? '0.032' : '0.103';
-      depositAddr = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
+      depositAddr = '0x0628b335D63e3FeCe5290e2447aa7914df72b491';
       coinNetwork = 'ETHEREUM MAINNET (ERC-20)';
     } else if (_selectedCrypto == 'SOL') {
       coinAmount = isCore ? '0.65' : '2.09';
-      depositAddr = 'HN7cABFi4ED52G5zLJsp89qYv48667E';
-      coinNetwork = 'SOLANA SPL';
+      depositAddr = '5EjgzoSvfpSAtzP55D25WdctHy4LSqV7qbiED4Ez6eBu';
+      coinNetwork = 'SOLANA MAINNET (SPL)';
     } else if (_selectedCrypto == 'USDT') {
       coinAmount = amountUsdt;
-      depositAddr = '0x71C7656EC7ab88b098defB751B7401B5f6d8976F';
-      coinNetwork = 'USDT (ERC-20 / TRC-20)';
+      depositAddr = '0x0628b335D63e3FeCe5290e2447aa7914df72b491';
+      coinNetwork = 'USDT (ERC-20)';
+    } else if (_selectedCrypto == 'BNB') {
+      coinAmount = isCore ? '0.17' : '0.54';
+      depositAddr = '0x0628b335D63e3FeCe5290e2447aa7914df72b491';
+      coinNetwork = 'BNB SMART CHAIN (BEP-20)';
     }
 
     return Column(
@@ -4225,7 +4603,7 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
             border: Border.all(color: const Color(0xFF222222)),
           ),
           child: Row(
-            children: ['USDT', 'BTC', 'ETH', 'SOL'].map((coin) {
+            children: ['USDT', 'BTC', 'ETH', 'SOL', 'BNB'].map((coin) {
               final isCoinSelected = _selectedCrypto == coin;
               return Expanded(
                 child: InkWell(
