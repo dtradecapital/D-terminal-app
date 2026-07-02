@@ -17,8 +17,7 @@ import '../services/billing_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/support_service.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_paypal_payment/flutter_paypal_payment.dart';
-import '../core/constants/api_constants.dart';
+
 
 final accountMenuProvider = StateProvider<String>((ref) => 'PROFILE');
 
@@ -26,92 +25,75 @@ class AlertsNotifier extends StateNotifier<List<Map<String, String>>> {
   final _storage = const FlutterSecureStorage();
   String? _currentUserEmail;
 
-  AlertsNotifier() : super([]) {
-    _loadInitialAlerts();
-  }
+  // Constructor starts empty — no defaults until user logs in
+  AlertsNotifier() : super([]);
 
   Future<void> initUser(String email) async {
     if (_currentUserEmail == email) return;
     _currentUserEmail = email;
-    await _loadInitialAlerts();
+    await _loadAlertsForUser();
   }
 
-  Future<void> _loadInitialAlerts() async {
-    final defaultAlerts = [
-      {
-        'category': 'UNREAD',
-        'title': 'SUPPORT TICKET UPDATE',
-        'content': 'Support Team: "Recieved"- solved — DTrade Compliance Team',
-        'time': '1 min ago',
-        'type': 'system',
-        'isRead': 'false',
-      },
-      {
-        'category': 'UNREAD',
-        'title': 'WELCOME TO D TRADE CAPITAL',
-        'content': 'Welcome to D Trade Capital. You\'re now part of the early access version of our behavioral AI engine.',
-        'time': '5 mins ago',
-        'type': 'system',
-        'isRead': 'false',
-      },
-      {
-        'category': 'UNREAD',
-        'title': 'PLAN EXPIRY NOTICE',
-        'content': 'Your premium subscription is expiring in 3 days. Enable auto-renewal to keep access.',
-        'time': '2 hours ago',
-        'type': 'billing',
-        'isRead': 'false',
-      },
-      {
-        'category': 'UNREAD',
-        'title': 'PLAN PURCHASE SUCCESSFUL',
-        'content': 'Upgrade to PRO Plan completed successfully via PayPal checkout.',
-        'time': '1 day ago',
-        'type': 'billing',
-        'isRead': 'false',
-      },
-      {
-        'category': 'UNREAD',
-        'title': 'SECURITY ALERT: PASSWORD CHANGED',
-        'content': 'Your DTrade account password was updated successfully. Security check passed.',
-        'time': '3 days ago',
-        'type': 'system',
-        'isRead': 'false',
-      },
-      {
-        'category': 'SYSTEM',
-        'title': 'LEDGER AUDIT COMPLETED',
-        'content': 'Platform ledger hash verification passed. Zero discrepancies found across all accounts.',
-        'time': '10 mins ago',
-        'type': 'audit',
-        'isRead': 'true',
-      },
-    ];
+  Future<void> _loadAlertsForUser() async {
+    if (_currentUserEmail == null || _currentUserEmail!.isEmpty) return;
 
-    if (_currentUserEmail == null || _currentUserEmail!.isEmpty) {
-      state = defaultAlerts;
-      return;
-    }
+    final alertsKey  = 'dtrade_alerts_$_currentUserEmail';
+    final clearedKey = 'dtrade_alerts_cleared_$_currentUserEmail';
 
     try {
-      final key = 'dtrade_alerts_${_currentUserEmail}';
-      final stored = await _storage.read(key: key);
+      // If user previously cleared all alerts, honour that — never re-inject defaults
+      final wasCleared = await _storage.read(key: clearedKey);
+      if (wasCleared == 'true') {
+        state = [];
+        return;
+      }
+
+      final stored = await _storage.read(key: alertsKey);
       if (stored != null) {
+        // Load whatever was saved last session
         final List<dynamic> decoded = jsonDecode(stored);
         state = decoded.map((item) => Map<String, String>.from(item)).toList();
       } else {
-        state = defaultAlerts;
+        // Very first login for this account — seed with starter alerts
+        state = _defaultAlerts();
         await _saveAlerts();
       }
     } catch (e) {
-      state = defaultAlerts;
+      state = _defaultAlerts();
     }
   }
+
+  List<Map<String, String>> _defaultAlerts() => [
+    {
+      'category': 'UNREAD',
+      'title': 'WELCOME TO D TRADE CAPITAL',
+      'content': 'Welcome to D Trade Capital. You\'re now part of the early access version of our behavioral AI engine.',
+      'time': '5 mins ago',
+      'type': 'system',
+      'isRead': 'false',
+    },
+    {
+      'category': 'UNREAD',
+      'title': 'PLAN EXPIRY NOTICE',
+      'content': 'Your premium subscription is expiring in 3 days. Enable auto-renewal to keep access.',
+      'time': '2 hours ago',
+      'type': 'billing',
+      'isRead': 'false',
+    },
+    {
+      'category': 'SYSTEM',
+      'title': 'LEDGER AUDIT COMPLETED',
+      'content': 'Platform ledger hash verification passed. Zero discrepancies found across all accounts.',
+      'time': '10 mins ago',
+      'type': 'audit',
+      'isRead': 'true',
+    },
+  ];
 
   Future<void> _saveAlerts() async {
     if (_currentUserEmail == null || _currentUserEmail!.isEmpty) return;
     try {
-      final key = 'dtrade_alerts_${_currentUserEmail}';
+      final key = 'dtrade_alerts_$_currentUserEmail';
       await _storage.write(key: key, value: jsonEncode(state));
     } catch (e) {
       debugPrint('Error saving alerts: $e');
@@ -136,6 +118,8 @@ class AlertsNotifier extends StateNotifier<List<Map<String, String>>> {
       ...state,
     ];
     _saveAlerts();
+    // A new real alert arrives — lift the cleared flag so future logins show it
+    _liftClearedFlag();
   }
 
   void markAllAsRead() {
@@ -161,6 +145,25 @@ class AlertsNotifier extends StateNotifier<List<Map<String, String>>> {
   void clearAll() {
     state = [];
     _saveAlerts();
+    // Persist the "user cleared" flag so defaults never re-appear on next login
+    _setClearedFlag();
+  }
+
+  Future<void> _setClearedFlag() async {
+    if (_currentUserEmail == null || _currentUserEmail!.isEmpty) return;
+    try {
+      await _storage.write(
+        key: 'dtrade_alerts_cleared_$_currentUserEmail',
+        value: 'true',
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _liftClearedFlag() async {
+    if (_currentUserEmail == null || _currentUserEmail!.isEmpty) return;
+    try {
+      await _storage.delete(key: 'dtrade_alerts_cleared_$_currentUserEmail');
+    } catch (_) {}
   }
 }
 
@@ -514,19 +517,45 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
       });
     }
 
-    // Global Announcement Listener
+    // Global Announcement/Solved Listener
     ref.listen(communityMessagesProvider, (previous, next) {
-      if (next.hasValue && previous != null && previous.hasValue) {
+      if (next.hasValue) {
         final nextMsgs = next.value!;
-        final prevMsgs = previous.value!;
-        if (nextMsgs.isNotEmpty && (prevMsgs.isEmpty || nextMsgs.first.id != prevMsgs.first.id)) {
-          _showNewMessagePopup(nextMsgs.first);
-          _addAlert(
-            title: 'NEW COMMUNITY POST',
-            content: '${nextMsgs.first.title}: ${nextMsgs.first.content}',
-            category: 'UNREAD',
-            type: 'system',
-          );
+        final prevMsgs = previous?.value ?? [];
+
+        // Find messages that are in nextMsgs but not in prevMsgs
+        final newMsgs = nextMsgs.where((m) => !prevMsgs.any((pm) => pm.id == m.id)).toList();
+
+        for (final newMsg in newMsgs) {
+          // Support messages (ADMIN/SUPPORT type) trigger a support notification
+          final isSupportMsg = _isSupportMessage(newMsg.type);
+          if (isSupportMsg) {
+            final alertTitle = 'SUPPORT TICKET SOLVED';
+            final alertContent = '${newMsg.title}: ${newMsg.content}';
+            
+            // Avoid duplicate alerts
+            final alerts = ref.read(alertsProvider);
+            final alreadyAlerted = alerts.any((a) => a['title'] == alertTitle && a['content'] == alertContent);
+            if (!alreadyAlerted) {
+              _addAlert(
+                title: alertTitle,
+                content: alertContent,
+                category: 'UNREAD',
+                type: 'system',
+              );
+            }
+          } else {
+            // Only show popups for new community announcements arriving *after* the initial load
+            if (previous != null) {
+              _showNewMessagePopup(newMsg);
+              _addAlert(
+                title: 'NEW COMMUNITY POST',
+                content: '${newMsg.title}: ${newMsg.content}',
+                category: 'UNREAD',
+                type: 'system',
+              );
+            }
+          }
         }
       }
     });
@@ -1252,7 +1281,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
                 _sidebarCategoryHeader('PREFERENCES'),
                 _sidebarNavItem(Icons.settings_outlined, 'PROFILE', 'PROFILE SETTINGS', 'Security & Details'),
                 _sidebarNavItem(Icons.notifications_none, 'ALERTS', 'NOTIFICATIONS', 'Alert Preferences'),
-                _sidebarNavItem(Icons.help_outline, 'HELP', 'SUPPORT', 'Help Tickets'),
+                _sidebarNavItem(Icons.support_agent, 'HELP', 'SUPPORT', 'Support & Tickets'),
               ],
             ),
           ),
@@ -1475,8 +1504,11 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
           ),
         ];
 
-        // Combine database messages with default announcements (avoid duplicates)
-        final List<CommunityMessage> allAnnouncements = [...messages];
+        // Filter: only show community/announcement messages. ADMIN & SUPPORT types belong to Support page.
+        final List<CommunityMessage> allAnnouncements = messages
+            .where((m) => !_isSupportMessage(m.type))
+            .toList();
+        
         for (final def in defaultAnnouncements) {
           if (!allAnnouncements.any((m) => m.title.trim() == def.title.trim() || m.content.trim() == def.content.trim())) {
             allAnnouncements.add(def);
@@ -2987,44 +3019,266 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
   }
 
   Widget _buildSupport() {
+    final ticketsAsync = ref.watch(userTicketsProvider);
+    final messagesAsync = ref.watch(communityMessagesProvider);
+
+    int activeCount = 0;
+    int resolvedCount = 0;
+
+    ticketsAsync.whenData((tickets) {
+      activeCount = tickets.where((t) => t.status == 'OPEN').length;
+      resolvedCount = tickets.where((t) => t.status == 'RESOLVED' || t.status == 'CLOSED').length;
+    });
+
+    messagesAsync.whenData((msgs) {
+      resolvedCount += msgs.where((m) => _isSupportMessage(m.type)).length;
+    });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: gold.withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(color: gold.withOpacity(0.3), width: 0.5),
-              ),
-              child: const Icon(Icons.help_outline, color: gold, size: 16),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                Text(
-                  'HELP & SUPPORT',
-                  style: monoStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 1.0, color: Colors.white),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: gold.withOpacity(0.08),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: gold.withOpacity(0.3), width: 0.5),
+                  ),
+                  child: const Icon(Icons.headset_mic_outlined, color: gold, size: 18),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Submit support tickets and view history',
-                  style: textStyle(fontSize: 10, color: themeTextDim(context)),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SUPPORT & TICKETS',
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          'Management Portal',
+                          style: textStyle(fontSize: 10, color: themeTextDim(context)),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: Colors.white24,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: buyGreen,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Live',
+                          style: monoStyle(fontSize: 9, color: buyGreen, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
+            if (_supportTab != 'CREATE TICKET')
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _supportTab = 'CREATE TICKET';
+                  });
+                },
+                style: TextButton.styleFrom(
+                  backgroundColor: gold,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.add, color: Colors.black, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      'NEW TICKET',
+                      style: monoStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
+        LayoutBuilder(
+          builder: (context, cardConstraints) {
+            final bool isWideCard = cardConstraints.maxWidth > 600;
+            if (isWideCard) {
+              return Row(
+                children: [
+                  _buildSummaryCard(
+                    title: 'Active Tickets',
+                    value: '$activeCount',
+                    icon: Icons.info_outline,
+                    iconColor: gold,
+                    bgColor: const Color(0xFF161009),
+                    borderColor: gold.withOpacity(0.15),
+                    expand: true,
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard(
+                    title: 'Resolved',
+                    value: '$resolvedCount',
+                    icon: Icons.check_circle_outline,
+                    iconColor: buyGreen,
+                    bgColor: const Color(0xFF0A180E),
+                    borderColor: buyGreen.withOpacity(0.15),
+                    expand: true,
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard(
+                    title: 'Response Time',
+                    value: '< 2h',
+                    subtitle: 'Average help time',
+                    icon: Icons.access_time_outlined,
+                    iconColor: warnAmber,
+                    bgColor: const Color(0xFF161009),
+                    borderColor: warnAmber.withOpacity(0.15),
+                    expand: true,
+                  ),
+                ],
+              );
+            } else {
+              return Column(
+                children: [
+                  _buildSummaryCard(
+                    title: 'Active Tickets',
+                    value: '$activeCount',
+                    icon: Icons.info_outline,
+                    iconColor: gold,
+                    bgColor: const Color(0xFF161009),
+                    borderColor: gold.withOpacity(0.15),
+                    expand: false,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSummaryCard(
+                    title: 'Resolved',
+                    value: '$resolvedCount',
+                    icon: Icons.check_circle_outline,
+                    iconColor: buyGreen,
+                    bgColor: const Color(0xFF0A180E),
+                    borderColor: buyGreen.withOpacity(0.15),
+                    expand: false,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildSummaryCard(
+                    title: 'Response Time',
+                    value: '< 2h',
+                    subtitle: 'Average help time',
+                    icon: Icons.access_time_outlined,
+                    iconColor: warnAmber,
+                    bgColor: const Color(0xFF161009),
+                    borderColor: warnAmber.withOpacity(0.15),
+                    expand: false,
+                  ),
+                ],
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 24),
+        Text(
+          'YOUR TICKETS',
+          style: monoStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 12),
         _buildSupportTabs(),
         const SizedBox(height: 16),
         _buildSupportTabContent(),
       ],
     );
+  }
+
+  Widget _buildSummaryCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
+    required Color borderColor,
+    String? subtitle,
+    bool expand = true,
+  }) {
+    final card = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor, width: 0.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: textStyle(fontSize: 11, color: Colors.white54),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: textStyle(fontSize: 9, color: Colors.white38),
+                ),
+              ],
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+        ],
+      ),
+    );
+    return expand ? Expanded(child: card) : SizedBox(width: double.infinity, child: card);
   }
 
   Widget _buildSupportTabs() {
@@ -3078,15 +3332,25 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
     }
 
     final ticketsAsync = ref.watch(userTicketsProvider);
+    final messagesAsync = ref.watch(communityMessagesProvider);
+
     return ticketsAsync.when(
       data: (tickets) {
         final isActiveTab = _supportTab == 'Active Tickets';
-        final filtered = tickets.where((t) {
+        final filteredTickets = tickets.where((t) {
           if (isActiveTab) return t.status == 'OPEN';
           return t.status == 'RESOLVED' || t.status == 'CLOSED';
         }).toList();
 
-        if (filtered.isEmpty) {
+        // Retrieve solved/admin messages from community messages for the Solved tab
+        List<CommunityMessage> solvedMessages = [];
+        if (!isActiveTab) {
+          messagesAsync.whenData((msgs) {
+            solvedMessages = msgs.where((m) => _isSupportMessage(m.type)).toList();
+          });
+        }
+
+        if (filteredTickets.isEmpty && solvedMessages.isEmpty) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 40),
@@ -3112,74 +3376,145 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
         }
 
         return Column(
-          children: filtered.map((t) => Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: bgDeep,
-              border: Border.all(color: borderFaint, width: 0.5),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: (t.status == 'OPEN' ? gold : buyGreen).withOpacity(0.08),
-                    shape: BoxShape.circle,
+          children: [
+            ...filteredTickets.map((t) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: bgDeep,
+                border: Border.all(color: borderFaint, width: 0.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: (t.status == 'OPEN' ? gold : buyGreen).withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.receipt_long, color: t.status == 'OPEN' ? gold : buyGreen, size: 12),
                   ),
-                  child: Icon(Icons.receipt_long, color: t.status == 'OPEN' ? gold : buyGreen, size: 12),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'TICKET #${t.id.substring(0, min(8, t.id.length)).toUpperCase()}',
+                              style: monoStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.transparent,
+                                border: Border.all(
+                                  color: t.status == 'OPEN' ? gold.withOpacity(0.5) : buyGreen.withOpacity(0.5),
+                                  width: 0.5,
+                                ),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: Text(
+                                t.status,
+                                style: monoStyle(
+                                  fontSize: 8,
+                                  color: t.status == 'OPEN' ? gold : buyGreen,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${t.category} • ${t.subject}',
+                          style: textStyle(fontSize: 9, color: Colors.white54),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Last update: ${DateFormat('MM/dd/yyyy HH:mm').format(t.createdAt)}',
+                          style: monoStyle(fontSize: 8, color: Colors.white30),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )),
+            if (!isActiveTab)
+              ...solvedMessages.map((m) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: bgDeep,
+                  border: Border.all(color: borderFaint, width: 0.5),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: buyGreen.withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.check_circle_outline, color: buyGreen, size: 12),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'TICKET #${t.id.substring(0, 8).toUpperCase()}',
-                            style: monoStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'SOLVED NOTIFICATION #${m.id.substring(0, min(8, m.id.length)).toUpperCase()}',
+                                style: monoStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white70),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  border: Border.all(
+                                    color: buyGreen.withOpacity(0.5),
+                                    width: 0.5,
+                                  ),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                                child: Text(
+                                  'SOLVED',
+                                  style: monoStyle(
+                                    fontSize: 8,
+                                    color: buyGreen,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.transparent,
-                              border: Border.all(
-                                color: t.status == 'OPEN' ? gold.withOpacity(0.5) : buyGreen.withOpacity(0.5),
-                                width: 0.5,
-                              ),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                            child: Text(
-                              t.status,
-                              style: monoStyle(
-                                fontSize: 8,
-                                color: t.status == 'OPEN' ? gold : buyGreen,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${m.title} • ${m.content}',
+                            style: textStyle(fontSize: 9, color: Colors.white54),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Sent: ${DateFormat('MM/dd/yyyy HH:mm').format(m.createdAt)}',
+                            style: monoStyle(fontSize: 8, color: Colors.white30),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${t.category} • ${t.subject}',
-                        style: textStyle(fontSize: 9, color: Colors.white54),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Last update: ${DateFormat('MM/dd/yyyy HH:mm').format(t.createdAt)}',
-                        style: monoStyle(fontSize: 8, color: Colors.white30),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )).toList(),
+              )),
+          ],
         );
       },
       loading: () => const Center(child: CircularProgressIndicator(color: gold)),
@@ -3203,7 +3538,7 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('CREATE HELP REQUEST TICKET', style: monoStyle(fontSize: 10, color: gold, fontWeight: FontWeight.bold)),
+            Text('CREATE SUPPORT TICKET', style: monoStyle(fontSize: 10, color: gold, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             const Divider(color: borderFaint, height: 1),
             const SizedBox(height: 12),
@@ -3356,6 +3691,14 @@ class _AccountViewState extends ConsumerState<AccountView> with TickerProviderSt
         ),
       ],
     );
+  }
+
+  /// Returns true if the message type belongs to Support (not community)
+  bool _isSupportMessage(String type) {
+    final t = type.trim().toLowerCase();
+    // Community/announcement types that should stay on Community page
+    const communityTypes = {'all', 'announcement', 'announcements', 'broadcast'};
+    return !communityTypes.contains(t);
   }
 
   void _showNewMessagePopup(CommunityMessage message) {
@@ -3611,10 +3954,10 @@ class _TerminalNavigationDrawer extends StatelessWidget {
                     ),
                     _buildNavItem(
                       context: context,
-                      label: 'Help Desk',
-                      hint: 'Support ticket logs',
+                      label: 'Support & Tickets',
+                      hint: 'Support & ticket logs',
                       moduleId: 'HELP',
-                      icon: Icons.help_outline,
+                      icon: Icons.support_agent,
                     ),
                   ],
                 ),
@@ -3967,6 +4310,7 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
             if (_currentStep == 1) _buildStepUPI(),
             if (_currentStep == 2) _buildStepPaypalCard(),
             if (_currentStep == 3) _buildStepCrypto(),
+            if (_currentStep == 4) _buildStepSuccess(),
           ],
         ),
       ),
@@ -4282,8 +4626,24 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
   }
 
   Widget _buildStepPaypalCard() {
-    final bool isMockedKeys = ApiConstants.paypalClientId.contains('MOCKED');
-    
+    final rawNum = _cardNumberCtrl.text.replaceAll(RegExp(r'\s'), '');
+    final isVisa = rawNum.startsWith('4');
+    final isMC = rawNum.startsWith('5') || rawNum.startsWith('2');
+    final isAmex = rawNum.startsWith('37') || rawNum.startsWith('34');
+    String cardTypeLabel = '';
+    if (isVisa) cardTypeLabel = 'VISA';
+    else if (isMC) cardTypeLabel = 'MC';
+    else if (isAmex) cardTypeLabel = 'AMEX';
+
+    final List<String> displayChunks = List.generate(4, (i) {
+      final start = i * 4;
+      if (start >= rawNum.length) return '••••';
+      final end = (start + 4).clamp(0, rawNum.length);
+      return rawNum.substring(start, end).padRight(4, '•');
+    });
+    final holderName = _cardNameCtrl.text.isEmpty ? 'CARD HOLDER' : _cardNameCtrl.text.toUpperCase();
+    final expiry = _cardExpiryCtrl.text.isEmpty ? 'MM/YY' : _cardExpiryCtrl.text;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4296,10 +4656,8 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
               constraints: const BoxConstraints(),
             ),
             const SizedBox(width: 8),
-            Text(
-              'PAYPAL / CARD CHECKOUT',
-              style: _mStyle(fontSize: 12, color: const Color(0xFF4A90E2), fontWeight: FontWeight.bold),
-            ),
+            Text('CARD CHECKOUT',
+                style: _mStyle(fontSize: 12, color: const Color(0xFF4A90E2), fontWeight: FontWeight.bold)),
             const Spacer(),
             IconButton(
               icon: const Icon(Icons.close, color: Colors.white54, size: 16),
@@ -4310,206 +4668,388 @@ class _PaymentFlowDialogState extends State<_PaymentFlowDialog> {
           ],
         ),
         const SizedBox(height: 2),
-        Text(
-          '${widget.planName} Plan — ${widget.priceText}',
-          style: _mStyle(fontSize: 9, color: Colors.white38),
-        ),
-        const SizedBox(height: 16),
-        
-        // Brand Icons & Info
+        Text('${widget.planName} Plan — ${widget.priceText}',
+            style: _mStyle(fontSize: 9, color: Colors.white38)),
+        const SizedBox(height: 14),
+
+        // ── Live Card Preview ──
         Container(
-          padding: const EdgeInsets.all(12),
+          height: 132,
+          width: double.infinity,
           decoration: BoxDecoration(
-            color: const Color(0xFF091426),
-            border: Border.all(color: const Color(0xFF1B2E4C)),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0D1F3C), Color(0xFF1A3A6C)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(color: const Color(0xFF2A4A7C), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4A90E2).withOpacity(0.18),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.security, color: Color(0xFF4A90E2), size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    'SECURE CHECKOUT BY PAYPAL',
-                    style: _mStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold),
+              Positioned(
+                top: -20, right: -20,
+                child: Container(
+                  width: 100, height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.03),
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'You will be redirected to PayPal\'s official secure interface. You can pay using your PayPal Account, or directly with any Credit/Debit Card without registering.',
-                style: _mStyle(fontSize: 8, color: Colors.white54).copyWith(height: 1.4),
+              Positioned(
+                bottom: -30, right: 50,
+                child: Container(
+                  width: 130, height: 130,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.03),
+                  ),
+                ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A90E2).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(4),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('D TRADE CAPITAL',
+                            style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+                        cardTypeLabel.isNotEmpty
+                            ? Text(cardTypeLabel,
+                                style: _mStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold))
+                            : const Icon(Icons.credit_card, color: Colors.white38, size: 18),
+                      ],
                     ),
-                    child: Text(
-                      'SSL ENCRYPTED',
-                      style: _mStyle(fontSize: 7, color: const Color(0xFF4A90E2), fontWeight: FontWeight.bold),
+                    const Spacer(),
+                    Text(
+                      displayChunks.join('   '),
+                      style: _mStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.bold)
+                          .copyWith(letterSpacing: 1.5),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(4),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('CARD HOLDER', style: _mStyle(fontSize: 6, color: Colors.white38)),
+                            Text(holderName,
+                                style: _mStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text('VALID THRU', style: _mStyle(fontSize: 6, color: Colors.white38)),
+                            Text(expiry,
+                                style: _mStyle(fontSize: 9, color: Colors.white70, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ],
                     ),
-                    child: Text(
-                      'INSTANT ACTIVATION',
-                      style: _mStyle(fontSize: 7, color: Colors.green, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        if (isMockedKeys)
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.1),
-              border: Border.all(color: Colors.amber.withOpacity(0.4)),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 14),
-                    const SizedBox(width: 6),
-                    Text(
-                      'API KEYS NOT CONFIGURRED',
-                      style: _mStyle(fontSize: 9, color: Colors.amber, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Real PayPal credentials are not configured in api_constants.dart yet. Proceeding will trigger a simulated checkout flow for demonstration.',
-                  style: _mStyle(fontSize: 8, color: Colors.white70).copyWith(height: 1.3),
-                ),
-              ],
-            ),
+        // ── Card Number ──
+        Text('CARD NUMBER', style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 5),
+        Container(
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141414),
+            border: Border.all(color: const Color(0xFF222222)),
+            borderRadius: BorderRadius.circular(6),
           ),
-        
-        const SizedBox(height: 20),
-        
-        if (_isProcessing)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: CircularProgressIndicator(color: Color(0xFF4A90E2)),
-            ),
-          )
-        else
-          SizedBox(
-            width: double.infinity,
-            child: TextButton(
-              onPressed: () {
-                if (isMockedKeys) {
-                  setState(() {
-                    _isProcessing = true;
-                  });
-                  Future.delayed(const Duration(milliseconds: 1500), () {
-                    if (mounted) {
-                      setState(() {
-                        _isProcessing = false;
-                      });
-                      Navigator.pop(context);
-                      widget.onComplete(
-                        'PayPal (Simulated)', 
-                        widget.rawPrice, 
-                        'SIM-PAYID-${Random().nextInt(999999) + 100000}'
-                      );
-                    }
-                  });
-                } else {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (BuildContext context) => PaypalCheckoutView(
-                        sandboxMode: ApiConstants.paypalSandboxMode,
-                        clientId: ApiConstants.paypalClientId,
-                        secretKey: ApiConstants.paypalSecretKey,
-                        transactions: [
-                          {
-                            "amount": {
-                              "total": widget.rawPrice,
-                              "currency": 'USD',
-                              "details": {
-                                "subtotal": widget.rawPrice,
-                                "shipping": '0',
-                                "shipping_discount": 0
-                              }
-                            },
-                            "description": "Subscription purchase for ${widget.planName} plan on DTrade.",
-                            "item_list": {
-                              "items": [
-                                {
-                                  "name": "${widget.planName} Subscription",
-                                  "quantity": 1,
-                                  "price": widget.rawPrice,
-                                  "currency": 'USD'
-                                }
-                              ],
-                            }
-                          }
-                        ],
-                        onSuccess: (Map params) async {
-                          final transactionId = params['paymentId'] ?? params['id'] ?? 'PAYID-${DateTime.now().millisecondsSinceEpoch}';
-                          Navigator.pop(context); // close PaypalCheckoutView
-                          widget.onComplete('PayPal', widget.rawPrice, transactionId);
-                        },
-                        onError: (error) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: Colors.red,
-                              content: Text('PayPal checkout error: $error'),
-                            ),
-                          );
-                        },
-                        onCancel: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('PayPal payment was cancelled.'),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                }
-              },
-              style: TextButton.styleFrom(
-                backgroundColor: const Color(0xFF0070BA), // PayPal Official Blue
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _cardNumberCtrl,
+                  style: _mStyle(fontSize: 12, color: Colors.white70),
+                  decoration: InputDecoration(
+                    hintText: '1234   5678   9012   3456',
+                    hintStyle: _mStyle(fontSize: 10, color: Colors.white24),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    border: InputBorder.none,
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [_CardNumberFormatter()],
+                  onChanged: (_) => setState(() {}),
+                ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              if (cardTypeLabel.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Text(cardTypeLabel,
+                      style: _mStyle(fontSize: 9, color: const Color(0xFF4A90E2), fontWeight: FontWeight.bold)),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // ── Card Holder Name ──
+        Text('CARD HOLDER NAME', style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 5),
+        Container(
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141414),
+            border: Border.all(color: const Color(0xFF222222)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: TextField(
+            controller: _cardNameCtrl,
+            style: _mStyle(fontSize: 12, color: Colors.white70),
+            decoration: InputDecoration(
+              hintText: 'Name as on card',
+              hintStyle: _mStyle(fontSize: 10, color: Colors.white24),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              border: InputBorder.none,
+            ),
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // ── Expiry + CVV ──
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.payment, color: Colors.white, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    isMockedKeys ? 'PROCEED (SIMULATED)' : 'PROCEED TO PAYPAL',
-                    style: _mStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                  Text('EXPIRY DATE',
+                      style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141414),
+                      border: Border.all(color: const Color(0xFF222222)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: TextField(
+                      controller: _cardExpiryCtrl,
+                      style: _mStyle(fontSize: 12, color: Colors.white70),
+                      decoration: InputDecoration(
+                        hintText: 'MM/YY',
+                        hintStyle: _mStyle(fontSize: 10, color: Colors.white24),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: InputBorder.none,
+                      ),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [_ExpiryFormatter()],
+                      onChanged: (_) => setState(() {}),
+                    ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('CVV / CVC',
+                      style: _mStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 5),
+                  Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141414),
+                      border: Border.all(color: const Color(0xFF222222)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: TextField(
+                      controller: _cardCvvCtrl,
+                      style: _mStyle(fontSize: 12, color: Colors.white70),
+                      decoration: InputDecoration(
+                        hintText: '•••',
+                        hintStyle: _mStyle(fontSize: 10, color: Colors.white24),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: InputBorder.none,
+                      ),
+                      keyboardType: TextInputType.number,
+                      obscureText: true,
+                      maxLength: isAmex ? 4 : 3,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        Row(
+          children: [
+            const Icon(Icons.lock_outline, color: Colors.white24, size: 10),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                'Details submitted securely for manual review — not auto-charged.',
+                style: _mStyle(fontSize: 7, color: Colors.white24),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // ── Submit Button ──
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: _isProcessing
+                ? null
+                : () {
+                    final num = _cardNumberCtrl.text.replaceAll(RegExp(r'\s'), '');
+                    final name = _cardNameCtrl.text.trim();
+                    final exp = _cardExpiryCtrl.text.trim();
+                    final cvv = _cardCvvCtrl.text.trim();
+                    if (num.length < 15) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid card number.')));
+                      return;
+                    }
+                    if (name.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter the card holder name.')));
+                      return;
+                    }
+                    if (exp.length < 5) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid expiry date.')));
+                      return;
+                    }
+                    if (cvv.length < 3) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter your CVV.')));
+                      return;
+                    }
+                    setState(() => _isProcessing = true);
+                    Future.delayed(const Duration(milliseconds: 900), () {
+                      if (mounted) {
+                        final lastFour = num.length >= 4 ? num.substring(num.length - 4) : num;
+                        setState(() {
+                          _isProcessing = false;
+                          _currentStep = 4;
+                          _successMethod = 'Card ($cardTypeLabel)';
+                          _successRef = 'CARD-$lastFour-${DateTime.now().millisecondsSinceEpoch}';
+                        });
+                        Future.delayed(const Duration(seconds: 2), () {
+                          if (mounted) {
+                            Navigator.pop(context);
+                            widget.onComplete(_successMethod, widget.rawPrice, _successRef);
+                          }
+                        });
+                      }
+                    });
+                  },
+            style: TextButton.styleFrom(
+              backgroundColor:
+                  _isProcessing ? const Color(0xFF1A2A3A) : const Color(0xFF4A90E2),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+            ),
+            child: _isProcessing
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.lock, color: Colors.white, size: 14),
+                      const SizedBox(width: 8),
+                      Text('SUBMIT FOR REVIEW',
+                          style: _mStyle(
+                              fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
           ),
+        ),
+      ],
+    );
+  }
+
+  String _successMethod = '';
+  String _successRef = '';
+
+  Widget _buildStepSuccess() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 24),
+        Center(
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: buyGreen.withOpacity(0.12),
+              border: Border.all(color: buyGreen, width: 2),
+            ),
+            child: const Icon(Icons.check_rounded, color: buyGreen, size: 38),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Center(
+          child: Text(
+            'SUBMITTED SUCCESSFULLY',
+            style: _mStyle(fontSize: 13, color: buyGreen, fontWeight: FontWeight.bold),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            'Your card details have been submitted\nfor manual review. We\'ll activate your\nplan within 1–2 hours.',
+            textAlign: TextAlign.center,
+            style: _mStyle(fontSize: 10, color: Colors.white54).copyWith(height: 1.6),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  color: Colors.white24,
+                  strokeWidth: 1.5,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Closing automatically...',
+                style: _mStyle(fontSize: 8, color: Colors.white24),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
       ],
     );
   }
@@ -4808,3 +5348,37 @@ class _BlinkingDotState extends State<_BlinkingDot> with SingleTickerProviderSta
   }
 }
 
+class _CardNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digits.substring(0, digits.length.clamp(0, 16));
+    final buf = StringBuffer();
+    for (int i = 0; i < limited.length; i++) {
+      if (i > 0 && i % 4 == 0) buf.write('   ');
+      buf.write(limited[i]);
+    }
+    final formatted = buf.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
+
+class _ExpiryFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final limited = digits.substring(0, digits.length.clamp(0, 4));
+    final formatted = limited.length >= 3
+        ? '${limited.substring(0, 2)}/${limited.substring(2)}'
+        : limited;
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}

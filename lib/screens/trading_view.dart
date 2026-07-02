@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/shared.dart';
 import '../widgets/live_candle_chart.dart';
+import '../widgets/trading_journal.dart';
 import '../services/intelligence_service.dart';
 import '../services/market_service.dart';
 
@@ -24,11 +25,14 @@ class _TradingViewState extends ConsumerState<TradingView> {
   int _positionsTabIndex = 0; // 0: Open, 1: History, 2: Pending
   final List<Map<String, dynamic>> _openPositions = [];
   final List<Map<String, dynamic>> _history = [];
+  final List<TradeEntry> _journalTrades = [];
 
   String _selectedOrderType = 'BUY';
   double _stopLoss = 50.0;
   double _takeProfit = 100.0;
   String _selectedSignalTab = 'ALL';
+  String _positionsFilter = 'ALL'; // ALL | BUY | SELL
+  String _selectedChartInterval = '5min'; // maps to TwelveData interval
   Set<int>? __expandedSignalIndices;
   Set<int> get _expandedSignalIndices => __expandedSignalIndices ??= {};
   String _selectedBiasTimeframe = 'H1';
@@ -901,27 +905,59 @@ class _TradingViewState extends ConsumerState<TradingView> {
       final closedPos = Map<String, dynamic>.from(pos);
       closedPos['closePrice'] = closedPos['current'];
       _history.add(closedPos);
+      // Add to journal trades
+      final pnlStr = pos['pnl']?.toString() ?? '0';
+      final pnlVal = double.tryParse(pnlStr.replaceAll('+', '')) ?? 0.0;
+      _journalTrades.insert(0, TradeEntry(
+        id: pos['id'] ?? '',
+        symbol: pos['symbol'] ?? _selectedSymbol,
+        type: pos['type'] ?? 'BUY',
+        pnl: pnlVal,
+        lots: double.tryParse(pos['lot'] ?? '0.01') ?? 0.01,
+        date: DateTime.now(),
+      ));
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      controller: _mainScrollController,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+    return Stack(
       children: [
-        _buildMarketWatch(),
-        const SizedBox(height: 16),
-        _buildSignals(),
-        const SizedBox(height: 16),
-        _buildAIAlerts(),
-        const SizedBox(height: 16),
-        _buildDirectionBias(),
-        const SizedBox(height: 16),
-        _buildChartSection(),
-        const SizedBox(height: 16),
-        _buildExecuteTrade(),
+        ListView(
+          controller: _mainScrollController,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          children: [
+            _buildMarketWatch(),
+            const SizedBox(height: 16),
+            _buildSignals(),
+            const SizedBox(height: 16),
+            _buildAIAlerts(),
+            const SizedBox(height: 16),
+            _buildDirectionBias(),
+            const SizedBox(height: 16),
+            _buildChartSection(),
+            const SizedBox(height: 16),
+            _buildExecuteTrade(),
+          ],
+        ),
+        // Fixed Journal FAB bottom-right
+        Positioned(
+          bottom: 20,
+          right: 16,
+          child: _buildJournalFAB(),
+        ),
       ],
+    );
+  }
+
+  Widget _buildJournalFAB() {
+    final tradeCount = _journalTrades.length;
+    final hasEntries = tradeCount > 0;
+
+    return _JournalFAB(
+      tradeCount: tradeCount,
+      hasEntries: hasEntries,
+      onTap: () => TradingJournalModal.show(context, _journalTrades),
     );
   }
 
@@ -1528,12 +1564,12 @@ class _TradingViewState extends ConsumerState<TradingView> {
               children: [
                 Row(
                   children: [
-                    _chartTab('1m', true),
-                    _chartTab('5m', false),
-                    _chartTab('15m', false),
-                    _chartTab('1H', false),
-                    _chartTab('4H', false),
-                    _chartTab('1D', false),
+                    _chartTab('1m',  '1min'),
+                    _chartTab('5m',  '5min'),
+                    _chartTab('15m', '15min'),
+                    _chartTab('1H',  '1h'),
+                    _chartTab('4H',  '4h'),
+                    _chartTab('1D',  '1day'),
                   ],
                 ),
                 const SizedBox(width: 16),
@@ -1557,7 +1593,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
             height: 260,
             padding: const EdgeInsets.only(top: 8, bottom: 20, right: 12),
             color: const Color(0xFF060606),
-            child: LiveCandleChart(symbol: _selectedSymbol),
+            child: LiveCandleChart(symbol: _selectedSymbol, interval: _selectedChartInterval),
           ),
           const Divider(color: borderFaint, height: 1),
           // Chart Bottom Tabs (Positions lists)
@@ -1580,11 +1616,11 @@ class _TradingViewState extends ConsumerState<TradingView> {
                   const SizedBox(width: 16),
                   Row(
                     children: [
-                      FilterTab(label: 'ALL', active: true, onTap: () {}),
+                      FilterTab(label: 'ALL',  active: _positionsFilter == 'ALL',  onTap: () => setState(() => _positionsFilter = 'ALL')),
                       const SizedBox(width: 4),
-                      FilterTab(label: 'BUY', active: false, onTap: () {}),
+                      FilterTab(label: 'BUY',  active: _positionsFilter == 'BUY',  onTap: () => setState(() => _positionsFilter = 'BUY')),
                       const SizedBox(width: 4),
-                      FilterTab(label: 'SELL', active: false, onTap: () {}),
+                      FilterTab(label: 'SELL', active: _positionsFilter == 'SELL', onTap: () => setState(() => _positionsFilter = 'SELL')),
                     ],
                   ),
                 ],
@@ -1597,18 +1633,22 @@ class _TradingViewState extends ConsumerState<TradingView> {
     );
   }
 
-  Widget _chartTab(String text, bool active) {
-    return Container(
-      margin: const EdgeInsets.only(right: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: active ? gold.withOpacity(0.08) : Colors.transparent,
-        border: Border.all(color: active ? gold : borderFaint),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        text,
-        style: monoStyle(color: active ? gold : textMid, fontSize: 9),
+  Widget _chartTab(String text, String interval) {
+    final active = _selectedChartInterval == interval;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedChartInterval = interval),
+      child: Container(
+        margin: const EdgeInsets.only(right: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: active ? gold.withOpacity(0.08) : Colors.transparent,
+          border: Border.all(color: active ? gold : borderFaint),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          text,
+          style: monoStyle(color: active ? gold : textMid, fontSize: 9),
+        ),
       ),
     );
   }
@@ -1724,6 +1764,7 @@ class _TradingViewState extends ConsumerState<TradingView> {
                   ),
           ),
           const SizedBox(height: 8),
+          // ── BUY / SELL toggle buttons (teal-green theme matching screenshot exactly) ──
           Row(
             children: [
               Expanded(
@@ -1732,34 +1773,49 @@ class _TradingViewState extends ConsumerState<TradingView> {
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedOrderType = 'BUY'),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      height: 40,
+                      duration: const Duration(milliseconds: 180),
+                      height: 48,
                       decoration: BoxDecoration(
-                        color: _selectedOrderType == 'BUY' ? buyGreen : Colors.transparent,
+                        color: const Color(0xFF0F1216),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _selectedOrderType == 'BUY' ? Colors.transparent : buyGreen.withOpacity(0.3),
-                          width: 1,
+                          color: _selectedOrderType == 'BUY'
+                              ? const Color(0xFF00E5A0)
+                              : Colors.white.withOpacity(0.1),
+                          width: _selectedOrderType == 'BUY' ? 1.5 : 1.0,
                         ),
-                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: _selectedOrderType == 'BUY'
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF00E5A0).withOpacity(0.25),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : [],
                       ),
                       alignment: Alignment.center,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            '▲ BUY',
-                            style: textStyle(
-                              color: _selectedOrderType == 'BUY' ? Colors.black : buyGreen,
-                              fontSize: 11,
+                          const Text(
+                            '▲  BUY',
+                            style: TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 2),
                           Text(
                             bidPrice.toStringAsFixed(digits),
-                            style: monoStyle(
-                              color: _selectedOrderType == 'BUY' ? Colors.black87 : Colors.white70,
-                              fontSize: 10,
+                            style: TextStyle(
+                              fontFamily: 'JetBrainsMono',
+                              fontSize: 9,
+                              color: _selectedOrderType == 'BUY'
+                                  ? const Color(0xFF00E5A0)
+                                  : Colors.white38,
                             ),
                           ),
                         ],
@@ -1775,34 +1831,49 @@ class _TradingViewState extends ConsumerState<TradingView> {
                   child: GestureDetector(
                     onTap: () => setState(() => _selectedOrderType = 'SELL'),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      height: 40,
+                      duration: const Duration(milliseconds: 180),
+                      height: 48,
                       decoration: BoxDecoration(
-                        color: _selectedOrderType == 'SELL' ? sellRed : Colors.transparent,
+                        color: const Color(0xFF0F1216),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: _selectedOrderType == 'SELL' ? Colors.transparent : sellRed.withOpacity(0.3),
-                          width: 1,
+                          color: _selectedOrderType == 'SELL'
+                              ? const Color(0xFFFF4C6A)
+                              : Colors.white.withOpacity(0.1),
+                          width: _selectedOrderType == 'SELL' ? 1.5 : 1.0,
                         ),
-                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: _selectedOrderType == 'SELL'
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFFFF4C6A).withOpacity(0.25),
+                                  blurRadius: 10,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : [],
                       ),
                       alignment: Alignment.center,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            '▼ SELL',
-                            style: textStyle(
-                              color: _selectedOrderType == 'SELL' ? Colors.black : sellRed,
-                              fontSize: 11,
+                          const Text(
+                            '▼  SELL',
+                            style: TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 2),
                           Text(
                             askPrice.toStringAsFixed(digits),
-                            style: monoStyle(
-                              color: _selectedOrderType == 'SELL' ? Colors.black87 : Colors.white70,
-                              fontSize: 10,
+                            style: TextStyle(
+                              fontFamily: 'JetBrainsMono',
+                              fontSize: 9,
+                              color: _selectedOrderType == 'SELL'
+                                  ? const Color(0xFFFF4C6A)
+                                  : Colors.white38,
                             ),
                           ),
                         ],
@@ -1825,17 +1896,12 @@ class _TradingViewState extends ConsumerState<TradingView> {
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _lotSizeBox('0.01'),
-              _lotSizeBox('0.05'),
-              _lotSizeBox('0.10'),
-              _lotSizeBox('0.20'),
-              _lotSizeBox('0.50'),
-              _lotSizeBox('1.00'),
-              _lotSizeBox('2.00'),
-            ],
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: ['0.01', '0.05', '0.10', '0.20', '0.30', '0.50', '1.00', '2.00']
+                .map((s) => _lotSizeBox(s))
+                .toList(),
           ),
           const SizedBox(height: 8),
           _customSliderRow(
@@ -1854,36 +1920,103 @@ class _TradingViewState extends ConsumerState<TradingView> {
             (v) => setState(() => _takeProfit = v),
           ),
           const SizedBox(height: 10),
-          // Risk/Reward Preview Box
+          // Risk / Reward preview
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             decoration: BoxDecoration(
-              color: bgDeep,
-              border: Border.all(color: borderFaint, width: 0.5),
-              borderRadius: BorderRadius.circular(4),
+              color: const Color(0xFF0C0F0C),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF1E2E1E), width: 1),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                Text(
-                  'RISK: \$${(_stopLoss * double.parse(_selectedLot) * 10).toStringAsFixed(2)}',
-                  style: monoStyle(color: sellRed, fontSize: 11, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text('RISK', style: TextStyle(fontSize: 8, color: Colors.white38, letterSpacing: 1)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${(_stopLoss * double.parse(_selectedLot) * 10 / (_stopLoss * double.parse(_selectedLot) * 10 + _takeProfit * double.parse(_selectedLot) * 10) * 100).toStringAsFixed(1)}%',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFFFF4C6A), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  'REWARD: \$${(_takeProfit * double.parse(_selectedLot) * 10).toStringAsFixed(2)}',
-                  style: monoStyle(color: buyGreen, fontSize: 11, fontWeight: FontWeight.bold),
+                Container(width: 1, height: 32, color: const Color(0xFF1E2E1E)),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text('REWARD', style: TextStyle(fontSize: 8, color: Colors.white38, letterSpacing: 1)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${(_takeProfit * double.parse(_selectedLot) * 10 / (_stopLoss * double.parse(_selectedLot) * 10 + _takeProfit * double.parse(_selectedLot) * 10) * 100).toStringAsFixed(1)}%',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF00E5A0), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  'R:R: 1:${(_takeProfit / _stopLoss).toStringAsFixed(1)}',
-                  style: monoStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold),
+                Container(width: 1, height: 32, color: const Color(0xFF1E2E1E)),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text('RATIO', style: TextStyle(fontSize: 8, color: Colors.white38, letterSpacing: 1)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '1:${(_takeProfit / _stopLoss).toStringAsFixed(1)}',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFFFFC107), fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          GoldButton(
-            label: 'EXECUTE TRADE',
-            onTap: _executeTrade,
+          // Execute button — teal-green glow style
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: _executeTrade,
+              child: Container(
+                width: double.infinity,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: _selectedOrderType == 'BUY'
+                      ? const Color(0xFF00B87A)
+                      : const Color(0xFFD94060),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _selectedOrderType == 'BUY'
+                        ? const Color(0xFF00E5A0)
+                        : const Color(0xFFFF4C6A),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (_selectedOrderType == 'BUY'
+                              ? const Color(0xFF00E5A0)
+                              : const Color(0xFFFF4C6A))
+                          .withOpacity(0.25),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _selectedOrderType == 'BUY' ? '▲  EXECUTE BUY' : '▼  EXECUTE SELL',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    color: _selectedOrderType == 'BUY'
+                        ? const Color(0xFF071A10)
+                        : const Color(0xFF1E020A),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1892,26 +2025,32 @@ class _TradingViewState extends ConsumerState<TradingView> {
 
   Widget _lotSizeBox(String size) {
     final active = _selectedLot == size;
-    return Expanded(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () => setState(() => _selectedLot = size),
-          child: Container(
-            height: 28,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            decoration: BoxDecoration(
-              color: active ? gold : bgElevated,
-              borderRadius: BorderRadius.circular(4),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedLot = size),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          height: 30,
+          width: 46,
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF0D2A40) : const Color(0xFF111820),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: active ? const Color(0xFF2196F3) : const Color(0xFF1E2A38),
+              width: active ? 1.2 : 1,
             ),
-            alignment: Alignment.center,
-            child: Text(
-              size,
-              style: textStyle(
-                color: active ? Colors.black : textMid,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
+            boxShadow: active
+                ? [BoxShadow(color: const Color(0xFF2196F3).withOpacity(0.2), blurRadius: 6)]
+                : [],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            size,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: active ? const Color(0xFF64B5F6) : Colors.white38,
             ),
           ),
         ),
@@ -1926,21 +2065,52 @@ class _TradingViewState extends ConsumerState<TradingView> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label, style: labelCaps(color: textMid)),
-            Text(
-              value,
-              style: monoStyle(color: activeColor, fontSize: 11, fontWeight: FontWeight.bold),
+            // +/- stepper buttons matching screenshot
+            Row(
+              children: [
+                _stepBtn(Icons.remove, () => onChanged((currentVal - 5).clamp(0.0, 1000.0))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: activeColor, width: 1.5),
+                    ),
+                  ),
+                  child: Text(
+                    '${currentVal.toInt()}',
+                    style: TextStyle(
+                      fontFamily: 'JetBrainsMono',
+                      fontSize: 11,
+                      color: activeColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                _stepBtn(Icons.add, () => onChanged((currentVal + 5).clamp(0.0, 1000.0))),
+                const SizedBox(width: 6),
+                Text(
+                  'PIPS',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: activeColor,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         SliderTheme(
           data: SliderThemeData(
-            trackHeight: 2,
+            trackHeight: 3,
             thumbColor: activeColor,
             activeTrackColor: activeColor,
-            inactiveTrackColor: borderFaint,
+            inactiveTrackColor: const Color(0xFF1A2030),
             overlayShape: SliderComponentShape.noOverlay,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
           ),
           child: Slider(
             value: currentVal,
@@ -1950,6 +2120,26 @@ class _TradingViewState extends ConsumerState<TradingView> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _stepBtn(IconData icon, VoidCallback onTap) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F1216),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 12, color: Colors.white),
+        ),
+      ),
     );
   }
 
@@ -1987,17 +2177,22 @@ class _TradingViewState extends ConsumerState<TradingView> {
 
   Widget _buildPositionsList() {
     if (_positionsTabIndex == 0) {
-      if (_openPositions.isEmpty) {
+      // Apply ALL/BUY/SELL filter
+      final filtered = _positionsFilter == 'ALL'
+          ? _openPositions
+          : _openPositions.where((p) => p['type'] == _positionsFilter).toList();
+
+      if (filtered.isEmpty) {
         return Column(
           children: [
             const SizedBox(height: 24),
             Text(
-              'NO ACTIVE POSITIONS',
+              _openPositions.isEmpty ? 'NO ACTIVE POSITIONS' : 'NO ${_positionsFilter} POSITIONS',
               style: monoStyle(color: textLow, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0),
             ),
             const SizedBox(height: 4),
             Text(
-              'CONNECT A BROKER TO INITIATE TRADES',
+              _openPositions.isEmpty ? 'CONNECT A BROKER TO INITIATE TRADES' : 'TRY A DIFFERENT FILTER',
               style: textStyle(color: Colors.white12, fontSize: 9),
             ),
             const SizedBox(height: 24),
@@ -2007,10 +2202,10 @@ class _TradingViewState extends ConsumerState<TradingView> {
       return ListView.separated(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        itemCount: _openPositions.length,
+        itemCount: filtered.length,
         separatorBuilder: (context, index) => const Divider(color: borderFaint, height: 1),
         itemBuilder: (context, index) {
-          final pos = _openPositions[index];
+          final pos = filtered[index];
           return _positionRow(pos);
         },
       );
@@ -2505,3 +2700,164 @@ class _SkeletonContainerState extends State<SkeletonContainer> with SingleTicker
     );
   }
 }
+
+// ─── Trading Journal FAB ─────────────────────────────────────────────────────
+class _JournalFAB extends StatefulWidget {
+  final int tradeCount;
+  final bool hasEntries;
+  final VoidCallback onTap;
+
+  const _JournalFAB({
+    required this.tradeCount,
+    required this.hasEntries,
+    required this.onTap,
+  });
+
+  @override
+  State<_JournalFAB> createState() => _JournalFABState();
+}
+
+class _JournalFABState extends State<_JournalFAB>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulseAnim;
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          widget.onTap();
+        },
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.92 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 44,
+            padding: EdgeInsets.symmetric(
+              horizontal: _hovered ? 16 : 12,
+            ),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E0E0E),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: widget.hasEntries
+                    ? gold.withOpacity(_hovered ? 0.9 : 0.5)
+                    : borderFaint,
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: widget.hasEntries
+                      ? gold.withOpacity(0.18)
+                      : Colors.black.withOpacity(0.4),
+                  blurRadius: _hovered ? 18 : 10,
+                  spreadRadius: _hovered ? 2 : 0,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseAnim,
+                  builder: (_, __) {
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (widget.hasEntries)
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: gold.withOpacity(_pulseAnim.value * 0.45),
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        const Icon(Icons.book_outlined, color: gold, size: 16),
+                      ],
+                    );
+                  },
+                ),
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 180),
+                  crossFadeState: _hovered
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  firstChild: widget.hasEntries
+                      ? Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: const BoxDecoration(
+                              color: gold,
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '${widget.tradeCount}',
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox(width: 0),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      widget.hasEntries
+                          ? 'JOURNAL  ${widget.tradeCount}'
+                          : 'JOURNAL',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: gold,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
